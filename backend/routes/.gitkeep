@@ -1,0 +1,2 @@
+// Folder for route definitions
+export const routePlaceholder = {};
