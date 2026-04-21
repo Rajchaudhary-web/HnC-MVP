@@ -14,6 +14,17 @@ if (supabaseUrl && supabaseAnonKey) {
 export { supabase };
 
 /**
+ * Valid Status Lifecycle:
+ * reported -> assigned -> in_progress -> resolved
+ */
+const STATUS_STAGES = {
+  reported: 0,
+  assigned: 1,
+  in_progress: 2,
+  resolved: 3
+};
+
+/**
  * Fetch all reports from the 'reports' table ordered by creation date
  */
 export const getReports = async () => {
@@ -28,7 +39,12 @@ export const getReports = async () => {
     console.error('Error fetching reports:', error);
     return [];
   }
-  return data;
+  
+  // Backward compatibility: Map legacy 'pending' or 'new' to 'reported'
+  return data.map(report => ({
+    ...report,
+    status: (report.status === 'pending' || report.status === 'new') ? 'reported' : report.status
+  }));
 };
 
 /**
@@ -40,13 +56,12 @@ export const createReport = async (reportData) => {
     throw new Error('Supabase client not initialized. Check your credentials.');
   }
 
-  const sanitizedStatus = (reportData.status === 'pending' || reportData.status === 'new' || !reportData.status) 
-    ? 'reported' 
-    : reportData.status;
+  // Ensure default status is 'reported'
+  const finalStatus = 'reported';
 
   const { data, error } = await supabase
     .from('reports')
-    .insert([{ ...reportData, status: sanitizedStatus }])
+    .insert([{ ...reportData, status: finalStatus }])
     .select();
 
   if (error) {
@@ -57,24 +72,76 @@ export const createReport = async (reportData) => {
 };
 
 /**
- * Update the status of an existing report
+ * Update the status of an existing report with workflow validation
  * @param {string} id - The report ID
- * @param {string} status - The new status (e.g., 'in_progress', 'resolved')
+ * @param {string} nextStatus - The new status to transition to
  */
-export const updateReportStatus = async (id, status) => {
+export const updateReportStatus = async (id, nextStatus) => {
   if (!supabase) {
     throw new Error('Supabase client not initialized.');
   }
 
+  // 1. Fetch current status to validate transition
+  const { data: current, error: fetchError } = await supabase
+    .from('reports')
+    .select('status')
+    .eq('id', id)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const currentStatus = (current.status === 'pending' || current.status === 'new') ? 'reported' : (current.status || 'reported');
+  
+  // 2. Validate transition (prevent going backwards or skipping stages except for direct assignment)
+  // We allow transition if nextStatus is one step ahead in the lifecycle
+  const currentStage = STATUS_STAGES[currentStatus] ?? 0;
+  const nextStage = STATUS_STAGES[nextStatus] ?? 0;
+
+  if (nextStage <= currentStage && currentStatus !== 'reported') {
+    console.warn(`Invalid transition attempt: ${currentStatus} -> ${nextStatus}`);
+    // still proceed if it's already in that status (idempotency)
+    if (currentStatus === nextStatus) return current; 
+    throw new Error(`Cannot transition from ${currentStatus} to ${nextStatus}`);
+  }
+
+  // 3. Perform update
   const { data, error } = await supabase
     .from('reports')
-    .update({ status })
+    .update({ status: nextStatus })
     .eq('id', id)
-    .select();
+    .select()
+    .single();
 
   if (error) {
     console.error('Error updating status:', error);
     throw error;
   }
-  return data[0];
+  return data;
+};
+
+/**
+ * Assign a report to a specific responder/worker and advance status to 'assigned'
+ * @param {string} reportId - The report ID (UUID)
+ * @param {string} workerId - The worker/responder ID (UUID)
+ */
+export const assignReport = async (reportId, workerId) => {
+  if (!supabase) throw new Error('Supabase client not initialized.');
+
+  const { data, error } = await supabase
+    .from('reports')
+    .update({
+      assigned_to: workerId,
+      assigned_at: new Date().toISOString(),
+      status: 'assigned' // Standardized workflow step
+    })
+    .eq('id', reportId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Assignment failed:', error);
+    throw error;
+  }
+
+  return data;
 };

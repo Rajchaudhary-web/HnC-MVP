@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase, updateReportStatus } from '../lib/supabaseClient';
+import { supabase, updateReportStatus, assignReport } from '../lib/supabaseClient';
 
 const StatCard = ({ icon: Icon, label, value, color }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -99,6 +99,12 @@ const StatCard = ({ icon: Icon, label, value, color }) => {
   );
 };
 
+const WORKERS = [
+  { id: "80088469-b24f-4d94-bf03-a2c9d6cc346b", name: "Raj Worker" },
+  { id: "d8fcec4b-dca0-4395-8b59-5f3f07c4cd78", name: "Field Agent 1" },
+  { id: "83eb0852-25bb-4232-a604-86be4040ca04", name: "Drain Specialist" }
+];
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -106,7 +112,9 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
-  const [workers, setWorkers] = useState([]);
+  const [workers, setWorkers] = useState(WORKERS);
+  const [assigningId, setAssigningId] = useState(null);
+  const [showAssignFor, setShowAssignFor] = useState(null);
 
   const fetchReports = async () => {
     try {
@@ -214,21 +222,16 @@ const AdminDashboard = () => {
     }
   };
 
-  const assignWorker = async (reportId, workerId) => {
+  const handleAssign = async (reportId, workerId) => {
     try {
-      const { error } = await supabase
-        .from('reports')
-        .update({
-          assigned_to: workerId,
-          status: 'assigned',
-          assigned_at: new Date().toISOString()
-        })
-        .eq('id', reportId);
-
-      if (error) throw error;
+      setAssigningId(reportId);
+      await assignReport(reportId, workerId);
+      setShowAssignFor(null);
       fetchReports();
     } catch (err) {
       console.log('Assignment failed:', err);
+    } finally {
+      setAssigningId(null);
     }
   };
 
@@ -530,6 +533,7 @@ const AdminDashboard = () => {
       }}>
         {[
           { label: 'Dashboard', icon: LayoutDashboard, route: '/admin' },
+          { label: 'Worker Panel', icon: Activity, route: '/worker' },
           { label: 'Resolved Issues', icon: CheckCircle, route: '/resolved' },
           { label: 'Incoming Reports', icon: AlertTriangle, route: '#' },
           { label: 'Analytics', icon: TrendingUp, route: '#' },
@@ -645,7 +649,7 @@ const AdminDashboard = () => {
                     reportsWithPriority.map((report) => {
                       const sevStyle = getSeverityStyles(report.severity);
                       const prioStyle = getPriorityLabel(report.priorityScore);
-                      const assignedWorker = workers.find(w => w.id === report.assigned_to);
+                      const assignedWorkerName = workers.find(w => w.id === report.assigned_to)?.name || report.assigned_to;
 
                       return (
                         <tr key={report.id} className="report-row" style={{ 
@@ -683,9 +687,9 @@ const AdminDashboard = () => {
                           </td>
                           <td style={{ padding: '15px', color: '#94A3B8', fontSize: '13px' }}>{getTimeAgo(report.created_at)}</td>
                           <td style={{ padding: '15px' }}>
-                            {assignedWorker ? (
+                            {assignedWorkerName ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <span style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>{assignedWorker.name}</span>
+                                <span style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>{assignedWorkerName}</span>
                                 <span style={{
                                   fontSize: '10px',
                                   fontWeight: 800,
@@ -706,77 +710,48 @@ const AdminDashboard = () => {
                             )}
                           </td>
                           <td style={{ padding: '15px', borderTopRightRadius: '12px', borderBottomRightRadius: '12px', position: 'relative', zIndex: 1 }}>
-                            {report.status === 'reported' && (
-                              <select
-                                value=""
-                                style={{
-                                  padding: '12px 16px',
-                                  borderRadius: '10px',
-                                  fontSize: '13px',
-                                  background: 'rgba(15, 23, 42, 0.9)',
-                                  color: '#fff',
-                                  border: '1px solid rgba(255,255,255,0.2)',
-                                  width: '200px',
-                                  cursor: 'pointer',
-                                  opacity: workers.length === 0 ? 0.8 : 1,
-                                  outline: 'none',
-
-                                  // critical fixes
-                                  appearance: 'auto',
-                                  WebkitAppearance: 'auto',
-                                  MozAppearance: 'auto',
-
-                                  pointerEvents: 'auto',
-                                  position: 'relative',
-                                  zIndex: 100,
-                                  userSelect: 'none',
-                                  transition: 'all 0.2s ease',
-                                }}
-                                onMouseOver={(e) => e.target.style.boxShadow = '0 0 15px rgba(0, 255, 200, 0.2)'}
-                                onMouseOut={(e) => e.target.style.boxShadow = 'none'}
-                                onChange={(e) => {
-                                  const workerId = e.target.value;
-                                  if (!workerId) return;
-                                  console.log("Assigning Worker ID:", workerId, "to Report:", report.id);
-                                  assignWorker(report.id, workerId);
-                                }}
-                              >
-                                <option value="">
-                                  {workers.length === 0 ? "No workers available" : "Assign Optimal Worker"}
-                                </option>
-                                {Array.isArray(workerLoad) && workerLoad.length > 0 ? (
-                                  workerLoad.map(worker => (
-                                    <option
-                                      key={worker.id}
-                                      value={worker.id}
-                                      disabled={worker.activeTasks >= 3}
-                                      style={{ background: '#0f172a' }}
-                                    >
-                                      {worker.name} ({worker.activeTasks} active) {bestWorker && worker.id === bestWorker.id ? " ⭐ Recommended" : ""} {worker.activeTasks >= 3 ? '— BUSY' : ''}
-                                    </option>
-                                  ))
-                                ) : null}
-                              </select>
-                            )}
-
-                            {report.status === 'assigned' && (
-                              <button onClick={() => startWork(report.id)} className="action-btn btn-blue-glow">
-                                Start Work
-                              </button>
-                            )}
-
-                            {report.status === 'in_progress' && (
-                              <button onClick={() => markResolved(report.id)} className="action-btn btn-green-glow">
-                                Mark Resolved
-                              </button>
-                            )}
-
-                            {report.status === 'resolved' && (
+                            {report.status !== 'resolved' ? (
+                              report.assigned_to ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--electric-blue)', fontWeight: 800, fontSize: '14px' }}>
+                                    <User size={16} /> Assigned to: {assignedWorkerName}
+                                  </div>
+                                  {report.assigned_at && (
+                                    <div style={{ fontSize: '10px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '24px' }}>
+                                      <Clock size={10} /> Dispatched: {new Date(report.assigned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{ position: 'relative' }}>
+                                  <select
+                                    disabled={assigningId === report.id}
+                                    style={{
+                                      padding: '10px 16px',
+                                      borderRadius: '10px',
+                                      fontSize: '13px',
+                                      background: '#0F172A',
+                                      color: 'white',
+                                      border: '1px solid var(--electric-blue)',
+                                      width: '200px',
+                                      cursor: 'pointer',
+                                      outline: 'none'
+                                    }}
+                                    onChange={(e) => handleAssign(report.id, e.target.value)}
+                                  >
+                                    <option value="">{assigningId === report.id ? 'Dispatching...' : 'Assign Responder...'}</option>
+                                    {WORKERS.map(w => <option key={w.id} value={w.id} style={{ background: '#0F172A' }}>{w.name}</option>)}
+                                  </select>
+                                </div>
+                              )
+                            ) : (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--sage)', fontWeight: 800, fontSize: '13px', opacity: 0.6, padding: '10px' }}>
                                 <CheckCircle size={16} /> Operational
                               </div>
                             )}
                           </td>
+
+
                         </tr>
                       );
                     })

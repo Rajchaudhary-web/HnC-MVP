@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   MapPin, Clock, AlertTriangle, CheckCircle, Activity, Settings, 
-  Home, Filter
+  Home, Filter, User
 } from 'lucide-react';
 import { supabase, getReports, updateReportStatus } from '../lib/supabaseClient';
 
@@ -78,6 +78,25 @@ const Dashboard = () => {
     setActionId(null);
   };
 
+  const handleAssign = async (reportId) => {
+    const workerId = "demo-worker-1"; // temporary
+    setActionId(reportId);
+    try {
+      await supabase
+        .from('reports')
+        .update({
+          assigned_to: workerId,
+          assigned_at: new Date().toISOString(),
+          status: 'assigned'
+        })
+        .eq('id', reportId);
+    } catch (err) {
+      console.error('Assignment failure:', err);
+    } finally {
+      setActionId(null);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--deep-navy)' }}>
       {/* Sidebar (Existing consistent design) */}
@@ -87,9 +106,8 @@ const Dashboard = () => {
         </div>
         <nav style={{ flex: 1, padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ marginBottom: '20px' }}><Link to="/" style={{ textDecoration: 'none', color: '#64748B', display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 20px' }}><Home size={18} /> Home</Link></div>
-          <div style={{ color: 'var(--electric-blue)', background: 'rgba(41, 121, 255, 0.1)', display: 'flex', alignItems: 'center', gap: '15px', padding: '14px 20px', borderRadius: '14px', fontWeight: 700 }}><LayoutDashboard size={20} /> Zone Intelligence</div>
-          <div style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '15px', padding: '14px 20px' }}><FileText size={20} /> Field Reports</div>
-          <div style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '15px', padding: '14px 20px' }}><Activity size={20} /> Live Telemetry</div>
+          <div style={{ color: 'var(--electric-blue)', background: 'rgba(41, 121, 255, 0.1)', display: 'flex', alignItems: 'center', gap: '15px', padding: '14px 20px', borderRadius: '14px', fontWeight: 700 }}><Activity size={20} /> Live Feed</div>
+          <div style={{ marginBottom: '10px' }}><Link to="/worker" style={{ textDecoration: 'none', color: '#64748B', display: 'flex', alignItems: 'center', gap: '15px', padding: '14px 20px' }}><Activity size={20} /> Worker Panel</Link></div>
           <div style={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: '15px', padding: '14px 20px' }}><Settings size={20} /> Control Settings</div>
         </nav>
       </aside>
@@ -141,17 +159,33 @@ const Dashboard = () => {
                     <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '15px', lineHeight: '1.5' }}>{report.location_name || report.description}</p>
                     
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--electric-blue)', fontSize: '11px', fontWeight: 700 }}>
-                        <Clock size={12} /> {report.eta || '--'}m ETA
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--electric-blue)', fontSize: '11px', fontWeight: 700 }}>
+                          <Clock size={12} /> {report.eta || '--'}m ETA
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#64748B', fontSize: '10px', fontWeight: 600 }}>
+                          <User size={10} /> {report.assigned_to ? `Assigned: ${report.assigned_to}` : 'Unassigned'}
+                        </div>
                       </div>
                       
-                      <button 
-                        onClick={() => handleStatusUpdate(report.id, 'resolved')}
-                        disabled={actionId === report.id}
-                        style={{ background: 'rgba(0,200,83,0.1)', border: '1px solid var(--neon-green)', color: 'var(--neon-green)', padding: '6px 14px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                      >
-                        {actionId === report.id ? 'Syncing...' : 'Mark Resolved'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        {report.status === 'reported' && (
+                          <button 
+                            onClick={() => handleAssign(report.id)}
+                            disabled={actionId === report.id}
+                            style={{ background: 'rgba(41,121,255,0.1)', border: '1px solid var(--electric-blue)', color: 'var(--electric-blue)', padding: '6px 14px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            {actionId === report.id ? 'Assigning...' : 'Assign'}
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleStatusUpdate(report.id, 'resolved')}
+                          disabled={actionId === report.id}
+                          style={{ background: 'rgba(0,200,83,0.1)', border: '1px solid var(--neon-green)', color: 'var(--neon-green)', padding: '6px 14px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {actionId === report.id ? 'Syncing...' : 'Mark Resolved'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
