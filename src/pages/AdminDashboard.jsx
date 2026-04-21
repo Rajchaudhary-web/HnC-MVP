@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, Activity, ChevronLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { supabase, getReports, updateReportStatus } from '../lib/supabaseClient';
+import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase, updateReportStatus } from '../lib/supabaseClient';
 
 const StatCard = ({ icon: Icon, label, value, color }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -101,6 +101,7 @@ const StatCard = ({ icon: Icon, label, value, color }) => {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState([]);
@@ -238,64 +239,14 @@ const AdminDashboard = () => {
     }
   };
 
-  const zoneStats = useMemo(() => {
-    console.log("Zone Input Reports:", reports);
-    if (!reports || reports.length === 0) return [];
 
-    const zones = {};
 
-    reports.forEach(r => {
-      const name = r.area || r.location_name || 'General Node';
-
-      if (!zones[name]) {
-        zones[name] = {
-          count: 0,
-          unresolved: 0
-        };
-      }
-
-      zones[name].count++;
-
-      if (r.status !== 'resolved') {
-        zones[name].unresolved++;
-      }
-    });
-
-    return Object.entries(zones).map(([name, data]) => {
-      let risk = "LOW";
-      let color = "var(--sage)";
-      let message = "Stable";
-      let glow = "none";
-      let isCritical = false;
-
-      if (data.unresolved >= 3) {
-        risk = "HIGH";
-        color = "var(--coral)";
-        message = "🚨 Critical Zone – Immediate Attention Required";
-        glow = "0 0 20px rgba(255, 82, 82, 0.4)";
-        isCritical = true;
-      } else if (data.unresolved === 2) {
-        risk = "MEDIUM";
-        color = "var(--orange)";
-        message = "⚠️ Rising Activity – Monitor Closely";
-        glow = "0 0 20px rgba(255, 109, 0, 0.4)";
-      }
-
-      return {
-        name,
-        total: data.count,
-        unresolved: data.unresolved,
-        risk,
-        color,
-        message,
-        glow,
-        isCritical
-      };
-    }).sort((a, b) => b.unresolved - a.unresolved);
+  const activeReports = useMemo(() => {
+    return reports.filter(r => r.status !== 'resolved');
   }, [reports]);
 
   const reportsWithPriority = useMemo(() => {
-    return reports.map(report => {
+    return activeReports.map(report => {
       let score = 0;
 
       // severity weight
@@ -312,7 +263,7 @@ const AdminDashboard = () => {
 
       return { ...report, priorityScore: score };
     }).sort((a, b) => b.priorityScore - a.priorityScore);
-  }, [reports]);
+  }, [activeReports]);
 
   const getPriorityLabel = (score) => {
     if (score >= 4) return { text: 'CRITICAL', color: 'var(--coral-red)', glow: '0 0 15px rgba(255, 82, 82, 0.4)' };
@@ -551,23 +502,29 @@ const AdminDashboard = () => {
         zIndex: 50
       }}>
         {[
-          { label: 'Dashboard', icon: LayoutDashboard, active: true },
-          { label: 'Incoming Reports', icon: AlertTriangle, active: false },
-          { label: 'Analytics', icon: TrendingUp, active: false },
-          { label: 'Teams', icon: Users, active: false },
-          { label: 'Messages', icon: MessageSquare, active: false },
-          { label: 'Settings', icon: Settings, active: false },
+          { label: 'Dashboard', icon: LayoutDashboard, route: '/admin' },
+          { label: 'Resolved Issues', icon: CheckCircle, route: '/resolved' },
+          { label: 'Incoming Reports', icon: AlertTriangle, route: '#' },
+          { label: 'Analytics', icon: TrendingUp, route: '#' },
+          { label: 'Teams', icon: Users, route: '#' },
+          { label: 'Messages', icon: MessageSquare, route: '#' },
+          { label: 'Settings', icon: Settings, route: '#' },
         ].map((item) => (
-          <div key={item.label} className={`sidebar-item ${item.active ? 'active' : ''}`} style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            padding: '12px 15px',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            color: item.active ? 'var(--teal)' : '#94A3B8',
-            fontWeight: item.active ? 600 : 400,
-          }}>
+          <div 
+            key={item.label} 
+            className={`sidebar-item ${location.pathname === item.route ? 'active' : ''}`} 
+            onClick={() => item.route !== '#' && navigate(item.route)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 15px',
+              borderRadius: '12px',
+              cursor: item.route !== '#' ? 'pointer' : 'default',
+              color: location.pathname === item.route ? 'var(--teal)' : '#94A3B8',
+              fontWeight: location.pathname === item.route ? 600 : 400,
+              opacity: item.route === '#' ? 0.6 : 1
+            }}>
             <item.icon size={20} />
             {item.label}
           </div>
@@ -608,7 +565,7 @@ const AdminDashboard = () => {
 
         {/* Stats */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
-          <StatCard icon={AlertTriangle} label="Active Issues" value={reports.filter(r => r.status !== 'resolved').length} color="var(--coral)" />
+          <StatCard icon={AlertTriangle} label="Active Issues" value={activeReports.length} color="var(--coral)" />
           <StatCard icon={CheckCircle} label="Resolved Today" value={reports.filter(r => r.status === 'resolved').length} color="var(--sage)" />
           <StatCard icon={Clock} label="Avg Response Time" value="18.5m" color="var(--orange)" />
           <StatCard icon={TrendingUp} label="High-Risk Zones" value="3" color="var(--teal)" />
@@ -651,10 +608,10 @@ const AdminDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {reports.length === 0 ? (
+                  {reportsWithPriority.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8', fontStyle: 'italic' }}>
-                        No urban anomalies currently detected in the neural grid.
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8', fontStyle: 'italic', fontSize: '15px' }}>
+                        All urban systems are currently stable. No active issues 🚀
                       </td>
                     </tr>
                   ) : (
@@ -884,79 +841,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Zone Intelligence Section */}
-        <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '40px', marginBottom: '40px' }}>
-          <div className="glass-card dashboard-card" style={{ padding: '30px' }}>
-            <h3 style={{ marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '0.5px' }}>
-              <Activity size={20} color="var(--teal)" /> Zone Intelligence
-            </h3>
 
-            {loading ? (
-              <div style={{ color: '#94A3B8' }}>Analyzing infrastructure...</div>
-            ) : zoneStats.length === 0 ? (
-              <div style={{ color: '#94A3B8', textAlign: 'center', padding: '20px' }}>No active zones detected</div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-                {zoneStats.map((zone) => {
-                  return (
-                    <div 
-                      key={zone.name} 
-                      className={`lead-card ${zone.isCritical ? 'zone-critical' : ''}`} 
-                      style={{
-                        background: 'rgba(15, 23, 42, 0.6)',
-                        padding: '24px',
-                        borderRadius: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '16px',
-                        boxShadow: zone.glow,
-                        border: `1px solid ${zone.color}30`,
-                        transition: 'all 0.5s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <div style={{ fontSize: '16px', fontWeight: 800, color: 'white', marginBottom: '4px' }}>{zone.name}</div>
-                          <div style={{ fontSize: '13px', color: '#94A3B8', fontWeight: 600 }}>
-                            <span style={{ color: zone.unresolved > 0 ? zone.color : '#94A3B8' }}>{zone.unresolved}</span> Unresolved Issues
-                          </div>
-                        </div>
-                        <div style={{
-                          padding: '4px 10px',
-                          borderRadius: '6px',
-                          fontSize: '10px',
-                          fontWeight: 900,
-                          background: `${zone.color}1A`,
-                          color: zone.color,
-                          border: `1px solid ${zone.color}40`,
-                          letterSpacing: '1.5px'
-                        }}>
-                          {zone.risk} RISK
-                        </div>
-                      </div>
-                      
-                      <div style={{ 
-                        padding: '12px 14px', 
-                        borderRadius: '10px', 
-                        background: 'rgba(0, 0, 0, 0.2)', 
-                        fontSize: '12px', 
-                        color: zone.unresolved > 0 ? zone.color : '#64748B',
-                        fontWeight: 700,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        border: '1px solid rgba(255, 255, 255, 0.03)',
-                        opacity: zone.unresolved > 0 ? 1 : 0.6
-                       }}>
-                         {zone.unresolved > 0 ? zone.message : 'System Stable'}
-                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
       </main>
     </div>
   );
