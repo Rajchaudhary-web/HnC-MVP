@@ -117,8 +117,18 @@ const AdminDashboard = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      console.log("Fetched Reports:", data);
-      setReports(Array.isArray(data) ? data : []);
+
+      setReports(prev => {
+        const newData = Array.isArray(data) ? data : [];
+        // Stabilize UI by preventing redundant state updates if data is identical
+        if (
+          prev.length === newData.length &&
+          prev.every((item, i) => item.id === newData[i]?.id)
+        ) {
+          return prev;
+        }
+        return newData;
+      });
     } catch (err) {
       console.log('Error fetching reports:', err);
     } finally {
@@ -163,15 +173,32 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
+    // initial load
     fetchReports();
     getLeads();
     fetchWorkers();
 
-    const interval = setInterval(() => {
-      fetchReports();
-    }, 5000); // reduced refresh cadence to 5s for better stability
+    // realtime subscription for instant situational awareness
+    const channel = supabase
+      .channel('reports-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // listens to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'reports',
+        },
+        (payload) => {
+          console.log('Realtime event Manifested:', payload);
+          fetchReports(); // refresh instantly on ground-truth mutation
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(interval);
+    // cleanup
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {

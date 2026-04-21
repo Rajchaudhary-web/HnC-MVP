@@ -49,7 +49,7 @@ const Contact = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '100px', paddingBottom: '50px', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '160px', paddingBottom: '80px', position: 'relative' }}>
       
       {/* Floating Background Shapes */}
       <div style={{ position: 'absolute', top: '20%', left: '10%', width: '300px', height: '300px', background: 'var(--electric-blue)', filter: 'blur(150px)', opacity: 0.2, zIndex: 0 }} />

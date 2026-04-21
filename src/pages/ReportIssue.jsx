@@ -56,6 +56,12 @@ const ReportIssue = () => {
     }
   };
 
+  // Helper to extract primary area node (before first comma)
+  const extractArea = (locName) => {
+    if (!locName) return 'General Node';
+    return locName.split(',')[0].trim();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -70,6 +76,7 @@ const ReportIssue = () => {
         severity: severity,
         status: 'reported',
         location_name: address,
+        area: extractArea(address), // Dynamic area extraction for Zone Intelligence
         zone_id: null, // Using null for UUID field as per schema update requirements
         pipeline_id: null
       };

@@ -6,11 +6,10 @@ const Navbar = () => {
   const location = useLocation();
 
   // Hide nav on dashboard pages where we have a sidebar
-  if (location.pathname === '/admin' || location.pathname === '/zones') return null;
+  if (location.pathname === '/admin') return null;
 
   const navLinks = [
     { name: 'Home', path: '/' },
-    { name: 'Zone Grid', path: '/zones' },
     { name: 'How It Works', path: '/how-it-works' },
     { name: 'Contact', path: '/contact' }
   ];

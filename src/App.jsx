@@ -6,7 +6,6 @@ import AdminDashboard from './pages/AdminDashboard';
 import HowItWorks from './pages/HowItWorks';
 import Contact from './pages/Contact';
 import ReportIssue from './pages/ReportIssue';
-import ZoneDashboard from './pages/ZoneDashboard';
 import ResolvedIssues from './pages/ResolvedIssues';
 import Loader from './components/Loader';
 import './index.css';
@@ -25,7 +24,7 @@ const AppContent = () => {
     }
 
     // Trigger loader for dashboard entering or report page
-    if (location.pathname === '/admin' || location.pathname === '/report' || location.pathname === '/zones' || location.pathname === '/resolved') {
+    if (location.pathname === '/admin' || location.pathname === '/report' || location.pathname === '/resolved') {
       setLoading(true);
     }
   }, [location.pathname]);
@@ -40,7 +39,7 @@ const AppContent = () => {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/zones" element={<ZoneDashboard />} />
+
         <Route path="/report" element={<ReportIssue />} />
         <Route path="/resolved" element={<ResolvedIssues />} />
         <Route path="/how-it-works" element={<HowItWorks />} />

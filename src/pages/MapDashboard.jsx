@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Layers, MapPin, Clock, Truck, Navigation, AlertTriangle, 
-  CheckCircle, Activity, LayoutDashboard, FileText, Settings, 
-  Search, Bell, Home, Radio, Plus, Minus, Info, ClipboardCheck, 
-  Play, Building2, ShieldAlert, Filter, ChevronRight, ShieldCheck
+  MapPin, Clock, AlertTriangle, CheckCircle, Activity, Settings, 
+  Home, Filter
 } from 'lucide-react';
 import { supabase, getReports, updateReportStatus } from '../lib/supabaseClient';
 
@@ -22,59 +20,11 @@ const StatCard = ({ label, value, color, icon: Icon }) => (
   </div>
 );
 
-const ZoneCard = ({ zone, active, onClick }) => {
-  const isCritical = zone.critical > 0;
-  return (
-    <div 
-      onClick={onClick}
-      className="glass-card" 
-      style={{ 
-        padding: '24px', 
-        cursor: 'pointer',
-        border: active ? '1px solid var(--electric-blue)' : '1px solid rgba(255,255,255,0.05)',
-        background: active ? 'rgba(41, 121, 255, 0.08)' : 'rgba(30, 41, 59, 0.4)',
-        transition: 'var(--transition)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}
-    >
-      {isCritical && <div style={{ position: 'absolute', top: '10px', right: '10px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--bright-coral)', boxShadow: '0 0 10px var(--bright-coral)' }} />}
-      
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
-        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', color: isCritical ? 'var(--bright-coral)' : '#94A3B8' }}>
-          <Building2 size={20} />
-        </div>
-        <div>
-          <h4 style={{ color: 'white', fontSize: '16px', fontWeight: 700 }}>{zone.name}</h4>
-          <span style={{ fontSize: '11px', color: '#64748B' }}>Zone Intelligence</span>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-        <div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: 'white' }}>{zone.total}</div>
-          <div style={{ fontSize: '10px', color: '#94A3B8', textTransform: 'uppercase' }}>Reports</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: isCritical ? 'var(--bright-coral)' : 'var(--neon-green)' }}>{zone.critical}</div>
-          <div style={{ fontSize: '10px', color: '#94A3B8', textTransform: 'uppercase' }}>Critical</div>
-        </div>
-      </div>
-      
-      <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', color: 'var(--neon-green)' }}>{zone.resolved} Resolved</span>
-        <ChevronRight size={14} color="#64748B" />
-      </div>
-    </div>
-  );
-};
-
 /* --- MAIN DASHBOARD --- */
 
 const Dashboard = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedZone, setSelectedZone] = useState('All Zones');
   const [actionId, setActionId] = useState(null);
 
   useEffect(() => {
@@ -95,36 +45,32 @@ const Dashboard = () => {
     // Real-time updates
     const channel = supabase
       .channel('reports_v2')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => {
-        getReports().then(setReports);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, (payload) => {
+        console.log('Incremental Sync Event:', payload.eventType);
+        setReports(prev => {
+          if (payload.eventType === 'INSERT') {
+            return [payload.new, ...prev];
+          }
+          if (payload.eventType === 'UPDATE') {
+            return prev.map(r => r.id === payload.new.id ? payload.new : r);
+          }
+          if (payload.eventType === 'DELETE') {
+            return prev.filter(r => r.id !== payload.old.id);
+          }
+          return prev;
+        });
       })
       .subscribe();
 
     return () => supabase.removeChannel(channel);
   }, []);
 
-  // Zone Grouping Logic
-  const zones = useMemo(() => {
-    const groups = {};
-    reports.forEach(r => {
-      const area = r.area || 'General Zone';
-      if (!groups[area]) {
-        groups[area] = { name: area, total: 0, critical: 0, resolved: 0, reports: [] };
-      }
-      groups[area].total += 1;
-      if (r.severity === 'high' && r.status !== 'resolved') groups[area].critical += 1;
-      if (r.status === 'resolved') groups[area].resolved += 1;
-      groups[area].reports.push(r);
-    });
-    return Object.values(groups).sort((a, b) => b.critical - a.critical);
+  // Filter for ONLY non-resolved reports for all mission-critical logic
+  const filteredReports = useMemo(() => {
+    return reports.filter(r => r.status !== 'resolved');
   }, [reports]);
 
-  const highPriorityZone = zones.find(z => z.critical > 0);
 
-  const filteredReports = useMemo(() => {
-    if (selectedZone === 'All Zones') return reports;
-    return reports.filter(r => (r.area || 'General Zone') === selectedZone);
-  }, [reports, selectedZone]);
 
   const handleStatusUpdate = async (id, status) => {
     setActionId(id);
@@ -151,85 +97,34 @@ const Dashboard = () => {
       {/* Main Content */}
       <main style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
         
-        {/* Priority Banner */}
-        {highPriorityZone && (
-          <div className="glass-card" style={{ marginBottom: '30px', background: 'rgba(255, 82, 82, 0.1)', border: '1px solid rgba(255, 82, 82, 0.3)', padding: '20px 30px', display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ background: 'var(--bright-coral)', padding: '12px', borderRadius: '12px', color: 'white', animation: 'pulse 2s infinite' }}>
-              <ShieldAlert size={24} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ color: 'white', fontSize: '18px', fontWeight: 800 }}>Critical Zone Detected: {highPriorityZone.name}</h3>
-              <p style={{ color: '#94A3B8', fontSize: '14px' }}>{highPriorityZone.critical} active sewage overflows require immediate neural routing.</p>
-            </div>
-            <button onClick={() => setSelectedZone(highPriorityZone.name)} className="btn btn-primary" style={{ background: 'var(--bright-coral)', padding: '10px 24px', fontSize: '13px' }}>Deploy Crew</button>
-          </div>
-        )}
+
 
         {/* Global Statistics */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
-          <StatCard label="Total Intelligence" value={reports.length} color="var(--electric-blue)" icon={Activity} />
-          <StatCard label="Critical Alerts" value={reports.filter(r => r.severity === 'high' && r.status !== 'resolved').length} color="var(--bright-coral)" icon={AlertTriangle} />
+          <StatCard label="Live Anomalies" value={filteredReports.length} color="var(--electric-blue)" icon={Activity} />
+          <StatCard label="Critical Alerts" value={filteredReports.filter(r => r.severity === 'high').length} color="var(--bright-coral)" icon={AlertTriangle} />
           <StatCard label="Successful Resolves" value={reports.filter(r => r.status === 'resolved').length} color="var(--neon-green)" icon={CheckCircle} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '40px' }}>
-          
-          {/* Zone Intelligence Grid & System Metrics */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 900 }}>Zone Intelligence</h2>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <div style={{ padding: '6px 12px', background: 'rgba(0,200,83,0.1)', color: 'var(--neon-green)', borderRadius: '6px', fontSize: '10px', fontWeight: 800 }}>LIVE SYNC</div>
-                <button 
-                  onClick={() => setSelectedZone('All Zones')}
-                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8', padding: '6px 16px', borderRadius: '30px', fontSize: '12px', cursor: 'pointer' }}
-                >
-                  Clear Node
-                </button>
-              </div>
-            </div>
-
-            {/* LIVE SYSTEM METRICS (THE NEW CARDS) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '25px' }}>
-               <div className="glass-card" style={{ padding: '15px', borderLeft: '3px solid var(--electric-blue)' }}>
-                 <div style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', marginBottom: '5px' }}>Neural Latency</div>
-                 <div style={{ fontSize: '18px', fontWeight: 800 }}>14ms <span style={{ fontSize: '10px', color: 'var(--neon-green)', marginLeft: '5px' }}>-2%</span></div>
-               </div>
-               <div className="glass-card" style={{ padding: '15px', borderLeft: '3px solid var(--neon-green)' }}>
-                 <div style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', marginBottom: '5px' }}>AI Integrity</div>
-                 <div style={{ fontSize: '18px', fontWeight: 800 }}>99.8% <ShieldCheck size={14} style={{ marginLeft: '5px', verticalAlign: 'middle' }} /></div>
-               </div>
-               <div className="glass-card" style={{ padding: '15px', borderLeft: '3px solid var(--vibrant-orange)' }}>
-                 <div style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', marginBottom: '5px' }}>Active Nodes</div>
-                 <div style={{ fontSize: '18px', fontWeight: 800 }}>1,240 <Radio size={14} style={{ marginLeft: '5px', verticalAlign: 'middle' }} /></div>
-               </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
-              {zones.map(zone => (
-                <ZoneCard 
-                  key={zone.name} 
-                  zone={zone} 
-                  active={selectedZone === zone.name} 
-                  onClick={() => setSelectedZone(zone.name)} 
-                />
-              ))}
-            </div>
-          </div>
-
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           {/* Neural Incident Feed */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 900 }}>Incident Feed: <span style={{ color: 'var(--electric-blue)' }}>{selectedZone}</span></h2>
-              <Filter size={18} color="#64748B" />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 900 }}>Live Incident Feed</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ padding: '6px 12px', background: 'rgba(0,200,83,0.1)', color: 'var(--neon-green)', borderRadius: '6px', fontSize: '10px', fontWeight: 800, letterSpacing: '1px' }}>neural-sync v2.0</div>
+                <Filter size={20} color="#64748B" />
+              </div>
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {filteredReports.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px', color: '#64748B' }} className="glass-card">No reports found in this node.</div>
+                <div style={{ textAlign: 'center', padding: '60px', color: '#64748B' }} className="glass-card">No active reports found in this node.</div>
               ) : (
-                filteredReports.map(report => (
-                  <div key={report.id} className="glass-card" style={{ padding: '20px', opacity: report.status === 'resolved' ? 0.6 : 1 }}>
+                filteredReports
+                  .filter(r => r.status !== 'resolved')
+                  .map(report => (
+                  <div key={report.id} className="glass-card" style={{ padding: '20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ 
@@ -250,21 +145,13 @@ const Dashboard = () => {
                         <Clock size={12} /> {report.eta || '--'}m ETA
                       </div>
                       
-                      {report.status !== 'resolved' && (
-                         <button 
-                            onClick={() => handleStatusUpdate(report.id, 'resolved')}
-                            disabled={actionId === report.id}
-                            style={{ background: 'rgba(0,200,83,0.1)', border: '1px solid var(--neon-green)', color: 'var(--neon-green)', padding: '6px 14px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                          >
-                            {actionId === report.id ? 'Syncing...' : 'Mark Resolved'}
-                         </button>
-                      )}
-                      
-                      {report.status === 'resolved' && (
-                        <div style={{ color: 'var(--neon-green)', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <CheckCircle size={14} /> Synced & Resolved
-                        </div>
-                      )}
+                      <button 
+                        onClick={() => handleStatusUpdate(report.id, 'resolved')}
+                        disabled={actionId === report.id}
+                        style={{ background: 'rgba(0,200,83,0.1)', border: '1px solid var(--neon-green)', color: 'var(--neon-green)', padding: '6px 14px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        {actionId === report.id ? 'Syncing...' : 'Mark Resolved'}
+                      </button>
                     </div>
                   </div>
                 ))

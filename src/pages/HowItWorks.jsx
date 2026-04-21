@@ -7,7 +7,7 @@ const HowItWorks = () => {
   const steps = [
     { id: 1, icon: Smartphone, title: '1. Report Issue', desc: 'Citizen logs blockage via mobile app with GPS & photo.', color: 'var(--electric-blue)' },
     { id: 2, icon: Radio, title: '2. System Notifies Authority', desc: 'AI analyzes severity and pings nearest municipal hub.', color: 'var(--vibrant-orange)' },
-    { id: 3, icon: Truck, title: '3. Team Responds', desc: 'Dispatched unit tracks location; user sees live ETA.', color: 'var(--bright-coral)' },
+    { id: 3, icon: Truck, title: '3. Team Responds', desc: 'Dispatched unit tracks location; user sees live ETA.', color: 'var(--coral-red)' },
     { id: 4, icon: CheckCircle, title: '4. Issue Resolved', desc: 'System updates map to green and saves data log.', color: 'var(--neon-green)' }
   ];
 

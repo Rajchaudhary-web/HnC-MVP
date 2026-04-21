@@ -46,7 +46,7 @@ const ResolvedIssues = () => {
         radial-gradient(circle at 90% 90%, rgba(0, 210, 255, 0.1), transparent 45%)
       `,
       color: 'white',
-      padding: '40px'
+      padding: '160px 40px 80px'
     }}>
       <style>{`
         .history-card {
