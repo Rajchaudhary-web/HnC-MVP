@@ -145,3 +145,72 @@ export const assignReport = async (reportId, workerId) => {
 
   return data;
 };
+
+/**
+ * Submit a new contact/demo request
+ */
+export const submitContactRequest = async ({ full_name, email, message }) => {
+  try {
+    const payload = {
+      full_name: full_name?.trim(),
+      email: email?.trim(),
+      message: message?.trim(),
+      status: 'pending'
+    };
+
+    console.log("📦 FINAL PAYLOAD:", payload);
+
+    const { data, error } = await supabase
+      .from('contact_requests')
+      .insert([payload])
+      .select();
+
+    if (error) {
+      console.error("❌ SUPABASE ERROR:", error);
+      return { success: false, error };
+    }
+
+    console.log("✅ INSERTED:", data);
+    return { success: true, data };
+
+  } catch (err) {
+    console.error("🔥 UNEXPECTED ERROR:", err);
+    return { success: false, error: err };
+  }
+};
+
+/**
+ * Fetch all contact requests ordered by newest first
+ */
+export const getContactRequests = async () => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('contact_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching contact requests:', error);
+    throw error;
+  }
+  return data;
+};
+
+/**
+ * Update the status of a specific contact request (e.g., 'approved', 'rejected')
+ */
+export const updateContactStatus = async (id, status) => {
+  if (!supabase) throw new Error('Supabase client not initialized.');
+
+  const { error } = await supabase
+    .from('contact_requests')
+    .update({ status })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error updating contact status:', error);
+    throw error;
+  }
+};
+

@@ -8,6 +8,7 @@ import Contact from './pages/Contact';
 import ReportIssue from './pages/ReportIssue';
 import ResolvedIssues from './pages/ResolvedIssues';
 import WorkerDashboard from './pages/WorkerDashboard';
+import ContactRequests from './pages/ContactRequests';
 import Loader from './components/Loader';
 import './index.css';
 
@@ -24,8 +25,12 @@ const AppContent = () => {
       window.hasInitiallyLoaded = true;
     }
 
-    // Trigger loader for dashboard entering or report page
-    if (location.pathname === '/admin' || location.pathname === '/report' || location.pathname === '/resolved' || location.pathname === '/worker') {
+    // Trigger loader for dashboard entering, report page, or requests registry
+    if (location.pathname === '/admin' || 
+        location.pathname === '/report' || 
+        location.pathname === '/resolved' || 
+        location.pathname === '/worker' || 
+        location.pathname === '/admin/requests') {
       setLoading(true);
     }
   }, [location.pathname]);
@@ -44,6 +49,7 @@ const AppContent = () => {
         <Route path="/report" element={<ReportIssue />} />
         <Route path="/worker" element={<WorkerDashboard />} />
         <Route path="/resolved" element={<ResolvedIssues />} />
+        <Route path="/admin/requests" element={<ContactRequests />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="*" element={<LandingPage />} />

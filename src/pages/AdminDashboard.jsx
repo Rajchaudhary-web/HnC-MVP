@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, updateReportStatus, assignReport } from '../lib/supabaseClient';
 
@@ -108,6 +108,14 @@ const WORKERS = [
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Helper to extract area name from location string
+  const extractArea = (locationName) => {
+    if (!locationName) return 'Unknown';
+    // Split by comma and take the first part (usually the sector/area)
+    const parts = locationName.split(',');
+    return parts[0]?.trim() || 'Unknown';
+  };
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState([]);
@@ -115,6 +123,9 @@ const AdminDashboard = () => {
   const [workers, setWorkers] = useState(WORKERS);
   const [assigningId, setAssigningId] = useState(null);
   const [showAssignFor, setShowAssignFor] = useState(null);
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedSeverity, setSelectedSeverity] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
 
   const fetchReports = async () => {
     try {
@@ -127,7 +138,11 @@ const AdminDashboard = () => {
       if (error) throw error;
 
       setReports(prev => {
-        const newData = Array.isArray(data) ? data : [];
+        const newData = (Array.isArray(data) ? data : []).map(r => ({
+          ...r,
+          area: extractArea(r.location_name)
+        }));
+        
         // Stabilize UI by preventing redundant state updates if data is identical
         if (
           prev.length === newData.length &&
@@ -271,29 +286,40 @@ const AdminDashboard = () => {
 
 
 
-  const activeReports = useMemo(() => {
-    return reports.filter(r => r.status !== 'resolved');
-  }, [reports]);
+  const filteredReports = useMemo(() => {
+    return reports.filter((report) => {
+      const statusMatch =
+        selectedStatus === 'all' || report.status === selectedStatus;
 
-  const reportsWithPriority = useMemo(() => {
-    return activeReports.map(report => {
-      let score = 0;
+      const severityMatch =
+        selectedSeverity === 'all' || report.severity === selectedSeverity;
 
-      // severity weight
-      if (report.severity === 'high') score += 3;
-      else if (report.severity === 'medium') score += 2;
-      else score += 1;
+      return statusMatch && severityMatch;
+    });
+  }, [reports, selectedStatus, selectedSeverity]);
 
-      // time weight (older = higher priority)
-      const created = new Date(report.created_at);
-      const now = new Date();
-      const diffHours = (now - created) / (1000 * 60 * 60);
+  const sortedReports = useMemo(() => {
+    return [...filteredReports].sort((a, b) => {
+      if (sortBy === 'newest') {
+        return new Date(b.created_at) - new Date(a.created_at);
+      }
+      if (sortBy === 'oldest') {
+        return new Date(a.created_at) - new Date(b.created_at);
+      }
+      if (sortBy === 'high_priority') {
+        return (b.severity === 'high') - (a.severity === 'high');
+      }
+      return 0;
+    });
+  }, [filteredReports, sortBy]);
 
-      if (diffHours > 6) score += 2;
-
-      return { ...report, priorityScore: score };
-    }).sort((a, b) => b.priorityScore - a.priorityScore);
-  }, [activeReports]);
+  // Derived priority scores for individual row styling
+  const getPriorityScore = (report) => {
+    let score = report.severity === 'high' ? 3 : (report.severity === 'medium' ? 2 : 1);
+    const diff = (new Date() - new Date(report.created_at)) / (1000 * 60 * 60);
+    if (diff > 6) score += 2;
+    return score;
+  };
 
   const getPriorityLabel = (score) => {
     if (score >= 4) return { text: 'CRITICAL', color: 'var(--coral-red)', glow: '0 0 15px rgba(255, 82, 82, 0.4)' };
@@ -304,10 +330,24 @@ const AdminDashboard = () => {
   const workerLoad = useMemo(() => {
     return workers.map(worker => ({
       ...worker,
-      activeTasks: reports.filter(r => r.assigned_to === worker.id && r.status !== 'resolved').length
+      load: reports.filter(r => r.assigned_to === worker.id && r.status !== 'resolved').length
     }));
-
   }, [workers, reports]);
+
+  // Area Intelligence System: Aggregate hotspots from enriched report data
+  const topAreas = useMemo(() => {
+    const stats = reports.reduce((acc, report) => {
+      const area = report.area || 'Unknown';
+      if (!acc[area]) {
+        acc[area] = { name: area, count: 0, high: 0 };
+      }
+      acc[area].count += 1;
+      if (report.severity === 'high') acc[area].high += 1;
+      return acc;
+    }, {});
+
+    return Object.values(stats).sort((a, b) => b.count - a.count);
+  }, [reports]);
 
   const bestWorker = useMemo(() => {
     if (!workerLoad || workerLoad.length === 0) return null;
@@ -535,6 +575,7 @@ const AdminDashboard = () => {
           { label: 'Dashboard', icon: LayoutDashboard, route: '/admin' },
           { label: 'Worker Panel', icon: Activity, route: '/worker' },
           { label: 'Resolved Issues', icon: CheckCircle, route: '/resolved' },
+          { label: 'Contact Requests', icon: Mail, route: '/admin/requests' },
           { label: 'Incoming Reports', icon: AlertTriangle, route: '#' },
           { label: 'Analytics', icon: TrendingUp, route: '#' },
           { label: 'Teams', icon: Users, route: '#' },
@@ -596,7 +637,7 @@ const AdminDashboard = () => {
 
         {/* Stats */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
-          <StatCard icon={AlertTriangle} label="Active Issues" value={activeReports.length} color="var(--coral)" />
+          <StatCard icon={AlertTriangle} label="Active Issues" value={sortedReports.length} color="var(--coral)" />
           <StatCard icon={CheckCircle} label="Resolved Today" value={reports.filter(r => r.status === 'resolved').length} color="var(--sage)" />
           <StatCard icon={Clock} label="Avg Response Time" value="18.5m" color="var(--orange)" />
           <StatCard icon={TrendingUp} label="High-Risk Zones" value="3" color="var(--teal)" />
@@ -605,8 +646,108 @@ const AdminDashboard = () => {
         {/* Middle Section */}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px', marginBottom: '40px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '40px', alignItems: 'start' }}>
           <div className="glass-card dashboard-card" style={{ padding: '30px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ letterSpacing: '0.5px', margin: 0 }}>Recent Reports</h3>
+            
+            {/* Area Intelligence Bar */}
+            <div style={{ marginBottom: '32px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '24px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MapPin size={18} color="var(--electric-blue)" /> Top Problem Areas
+              </h3>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                {topAreas.slice(0, 5).map((area) => (
+                  <div 
+                    key={area.name}
+                    style={{
+                      padding: '12px 20px',
+                      borderRadius: '12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      fontSize: '13px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}
+                  >
+                    <span style={{ fontWeight: 800, color: 'white' }}>{area.name}</span>
+                    <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)' }} />
+                    <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{area.count} {area.count === 1 ? 'report' : 'reports'}</span>
+                    {area.high > 0 && (
+                      <span style={{ 
+                        padding: '2px 6px', background: 'rgba(255, 82, 82, 0.1)', color: 'var(--coral-red)', 
+                        borderRadius: '4px', fontSize: '10px', fontWeight: 800 
+                      }}>
+                        {area.high} HIGH
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <h3 style={{ letterSpacing: '0.5px', margin: 0 }}>Recent Reports</h3>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <select 
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '8px',
+                      color: '#94A3B8',
+                      fontSize: '12px',
+                      padding: '5px 10px',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="reported">Reported</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                  <select 
+                    value={selectedSeverity}
+                    onChange={(e) => setSelectedSeverity(e.target.value)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '8px',
+                      color: '#94A3B8',
+                      fontSize: '12px',
+                      padding: '5px 10px',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                  
+                  {/* Sort Controls */}
+                  <select 
+                    value={sortBy} 
+                    onChange={(e) => setSortBy(e.target.value)}
+                    style={{ 
+                      padding: '8px', 
+                      borderRadius: '8px',
+                      background: 'rgba(41, 121, 255, 0.05)',
+                      border: '1px solid rgba(41, 121, 255, 0.2)',
+                      color: 'var(--electric-blue)',
+                      fontSize: '12px',
+                      outline: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 700
+                    }}
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="high_priority">High Priority</option>
+                  </select>
+                </div>
+              </div>
               <div style={{
                 fontSize: '12px',
                 color: 'var(--teal)',
@@ -639,16 +780,17 @@ const AdminDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportsWithPriority.length === 0 ? (
+                  {sortedReports.length === 0 ? (
                     <tr>
                       <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8', fontStyle: 'italic', fontSize: '15px' }}>
                         All urban systems are currently stable. No active issues 🚀
                       </td>
                     </tr>
                   ) : (
-                    reportsWithPriority.map((report) => {
+                    sortedReports.map((report) => {
                       const sevStyle = getSeverityStyles(report.severity);
-                      const prioStyle = getPriorityLabel(report.priorityScore);
+                      const priorityScore = getPriorityScore(report);
+                      const prioStyle = getPriorityLabel(priorityScore);
                       const assignedWorkerName = workers.find(w => w.id === report.assigned_to)?.name || report.assigned_to;
 
                       return (
@@ -656,7 +798,7 @@ const AdminDashboard = () => {
                           background: 'rgba(15, 23, 42, 0.6)', 
                           borderRadius: '12px',
                           boxShadow: report.status !== 'resolved' ? prioStyle.glow : 'none',
-                          border: report.status !== 'resolved' && report.priorityScore >= 4 ? '1px solid rgba(255, 82, 82, 0.2)' : 'none'
+                          border: report.status !== 'resolved' && priorityScore >= 4 ? '1px solid rgba(255, 82, 82, 0.2)' : 'none'
                         }}>
                           <td style={{ padding: '15px', fontWeight: 600, borderTopLeftRadius: '12px', borderBottomLeftRadius: '12px' }}>
                             {report.location_name || report.area || 'Unknown'}

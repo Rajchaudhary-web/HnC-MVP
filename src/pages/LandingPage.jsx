@@ -1,7 +1,8 @@
-import React, { Suspense, memo } from 'react';
+import React, { Suspense, memo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Zap, Activity, BellRing, Database, ChevronDown, ShieldCheck, Globe, Radio } from 'lucide-react';
+import { Zap, Activity, BellRing, Database, ChevronDown, ShieldCheck, Globe, Radio, Mail, MessageSquare, User, Send } from 'lucide-react';
 import Reveal from '../components/Reveal';
+import { submitContactRequest } from '../lib/supabaseClient';
 
 // Lazy load Spline to prevent blocking the main thread during initial paint
 const Spline = React.lazy(() => import('@splinetool/react-spline'));
@@ -67,6 +68,8 @@ const FloatingNode = memo(({ style, text, icon: Icon, color = 'var(--electric-bl
 
 const LandingPage = () => {
   const navigate = useNavigate();
+
+
   return (
     <div style={{ 
       background: '#000000', 
@@ -265,6 +268,13 @@ const LandingPage = () => {
           <Reveal delay={0.3}><FeatureCard icon={BellRing} title="Smart Node" description="Preventative maintenance alerts." color="255, 82, 82" /></Reveal>
           <Reveal delay={0.4}><FeatureCard icon={Database} title="Master Console" description="Full urban data orchestration." color="41, 121, 255" /></Reveal>
         </div>
+      </section>
+
+      {/* SECTION 5: NEURAL INQUIRY TERMINAL REMOVED */}
+      <section id="contact-section" style={{ maxWidth: '1000px', margin: '0 auto 80px', padding: '0 20px', position: 'relative', zIndex: 40 }}>
+        <Reveal>
+          {/* Form Removed */}
+        </Reveal>
       </section>
 
       <style>{`

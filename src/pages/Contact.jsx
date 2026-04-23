@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Send, CheckCircle, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { submitContactRequest } from '../lib/supabaseClient';
 
 const Contact = () => {
-  const [name, setName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -15,20 +15,34 @@ const Contact = () => {
     setIsSubmitting(true);
     setError(null);
 
-    try {
-      const { error: insertError } = await supabase
-        .from('leads')
-        .insert([{ name, email, message }]);
-
-      if (insertError) throw insertError;
-      
-      setSubmitted(true);
-    } catch (err) {
-      console.error('Lead Submission Error:', err);
-      setError(err.message || 'Failed to transmit request. Please try again.');
-    } finally {
+    if (message.trim().length < 20) {
+      setError("Message must be at least 20 characters long");
       setIsSubmitting(false);
+      return;
     }
+
+    const payload = {
+      full_name: fullName,
+      email: email,
+      message: message
+    };
+
+    const res = await submitContactRequest(payload);
+
+    if (!res || res.success === false) {
+      alert("Submission failed");
+      setError(res?.error?.message || "Submission failed");
+      setIsSubmitting(false);
+      return;
+    }
+
+    alert("Request submitted successfully");
+
+    setFullName('');
+    setEmail('');
+    setMessage('');
+    setSubmitted(true);
+    setIsSubmitting(false);
   };
 
   if (submitted) {
@@ -78,8 +92,8 @@ const Contact = () => {
               <input 
                 type="text" 
                 required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 placeholder="Jane Doe" 
                 style={{ 
                   width: '100%', padding: '15px', borderRadius: '12px', 
