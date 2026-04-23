@@ -105,15 +105,15 @@ const WorkerDashboard = () => {
         </div>
 
         <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '8px', color: isResolved ? '#94A3B8' : 'white' }}>{report.title || 'Mission Record'}</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+          <h3 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '8px', color: isResolved ? 'var(--text-muted)' : 'var(--text-primary)' }}>{report.title || 'Mission Record'}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '14px' }}>
             <MapPin size={16} /> {report.location_name || 'Grid Coordinates Locked'}
           </div>
         </div>
 
         <div style={{ 
-          background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px', fontSize: '14px', 
-          color: '#CBD5E1', marginBottom: '24px', borderLeft: `2px solid ${isResolved ? 'var(--text-muted)' : (currentStatus === 'in_progress' ? 'var(--electric-blue)' : severity.color)}`
+          background: 'rgba(15, 23, 42, 0.08)', padding: '16px', borderRadius: '12px', fontSize: '14px', 
+          color: 'var(--text-primary)', marginBottom: '24px', borderLeft: `2px solid ${isResolved ? 'var(--text-muted)' : (currentStatus === 'in_progress' ? 'var(--electric-blue)' : severity.color)}`
         }}>
           {report.description || 'No additional mission intelligence provided.'}
         </div>
@@ -168,8 +168,8 @@ const WorkerDashboard = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'var(--deep-void)',
-      color: 'white',
+      background: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
       padding: '160px 40px 80px',
       backgroundImage: `radial-gradient(circle at 10% 10%, rgba(41, 121, 255, 0.1), transparent 45%)`
     }}>
@@ -185,7 +185,7 @@ const WorkerDashboard = () => {
               <ChevronLeft size={18} /> Exit Terminal
             </button>
             <h1 className="gradient-text" style={{ fontSize: '42px', fontWeight: 900, marginBottom: '12px' }}>Responder Console</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '18px' }}>Active missions for <span style={{ color: 'white', fontWeight: 700 }}>Raj Worker</span> (Unit: Alpha-1)</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '18px' }}>Active missions for <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>Raj Worker</span> (Unit: Alpha-1)</p>
           </div>
           <div className="glass-card" style={{ padding: '15px 25px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ position: 'relative' }}>
@@ -198,7 +198,7 @@ const WorkerDashboard = () => {
 
         {/* Missions View */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '100px', color: 'var(--text-secondary)' }}>Establishing secure link to mission database...</div>
+          <div style={{ textAlign: 'center', padding: '100px', color: 'var(--text-muted)' }}>Establishing secure link to mission database...</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '60px' }}>
             

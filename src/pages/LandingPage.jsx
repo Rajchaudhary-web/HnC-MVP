@@ -1,4 +1,4 @@
-import React, { Suspense, memo, useState } from 'react';
+import React, { Suspense, memo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Zap, Activity, BellRing, Database, ChevronDown, ShieldCheck, Globe, Radio, Mail, MessageSquare, User, Send } from 'lucide-react';
 import Reveal from '../components/Reveal';
@@ -69,10 +69,18 @@ const FloatingNode = memo(({ style, text, icon: Icon, color = 'var(--electric-bl
 const LandingPage = () => {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    try {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) {
+      console.error("Theme lock failed:", e);
+    }
+  }, []);
+
 
   return (
     <div style={{ 
-      background: '#000000', 
+      background: '#020617', 
       color: 'white', 
       position: 'relative', 
       overflowX: 'hidden',
@@ -92,7 +100,7 @@ const LandingPage = () => {
         margin: '0 auto',
         position: 'relative',
         zIndex: 30,
-        background: 'linear-gradient(to bottom, transparent 70%, #000000 100%)'
+        background: 'linear-gradient(to bottom, transparent 70%, #020617 100%)'
       }}>
         <Reveal>
           <div style={{ 
@@ -148,7 +156,7 @@ const LandingPage = () => {
         overflow: 'hidden',
         marginTop: '-120px',
         background: 'transparent',
-        boxShadow: 'inset 0 -80px 120px #000000',
+        boxShadow: 'inset 0 -80px 120px #020617',
         zIndex: 5
       }}>
         {/* HUD OVERLAY */}

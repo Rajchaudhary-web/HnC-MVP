@@ -50,8 +50,8 @@ const ContactRequests = () => {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      background: '#020617', 
-      color: 'white', 
+      background: 'var(--bg-primary)', 
+      color: 'var(--text-primary)', 
       padding: '40px',
       fontFamily: 'Inter, system-ui, sans-serif'
     }}>
@@ -63,10 +63,10 @@ const ContactRequests = () => {
             onClick={() => navigate('/admin')}
             style={{ 
               background: 'rgba(255,255,255,0.03)', 
-              border: '1px solid rgba(255,255,255,0.1)', 
+              border: '1px solid var(--border-color)', 
               padding: '10px', 
               borderRadius: '12px', 
-              color: 'white', 
+              color: 'var(--text-primary)', 
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center'
@@ -76,12 +76,12 @@ const ContactRequests = () => {
           </button>
           <div>
             <h1 style={{ fontSize: '32px', fontWeight: 900, letterSpacing: '-1px', marginBottom: '4px' }}>Contact Requests</h1>
-            <p style={{ color: '#94A3B8', fontSize: '14px' }}>Manage community inquiries and neural access dispatches.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Manage community inquiries and neural access dispatches.</p>
           </div>
         </div>
 
         {loading ? (
-          <div style={{ color: '#64748B', textAlign: 'center', padding: '100px' }}>Syncing with ground-truth registry...</div>
+          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '100px' }}>Syncing with ground-truth registry...</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {requests?.length > 0 ? (
@@ -93,8 +93,8 @@ const ContactRequests = () => {
                   <div key={req.id} className="glass-card premium-hover" style={{ 
                     padding: '30px', 
                     borderRadius: '24px', 
-                    background: 'rgba(15, 23, 42, 0.6)', 
-                    border: '1px solid rgba(255,255,255,0.05)',
+                    background: 'var(--bg-card)', 
+                    border: '1px solid var(--border-color)',
                     position: 'relative',
                     transition: 'all 0.3s ease'
                   }}>
@@ -114,7 +114,7 @@ const ContactRequests = () => {
                         </div>
                         <div>
                           <h4 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>{req.full_name}</h4>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94A3B8', fontSize: '13px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
                             <Mail size={12} /> {req.email}
                           </div>
                         </div>
@@ -138,18 +138,18 @@ const ContactRequests = () => {
                     </div>
 
                     <div style={{ 
-                      background: 'rgba(0,0,0,0.2)', 
+                      background: 'rgba(15, 23, 42, 0.08)', 
                       padding: '20px', 
                       borderRadius: '16px', 
                       marginBottom: '24px',
                       border: '1px solid rgba(255,255,255,0.03)',
-                      color: '#E2E8F0',
+                      color: 'var(--text-primary)',
                       fontSize: '15px',
                       lineHeight: '1.6',
                       display: 'flex',
                       gap: '12px'
                     }}>
-                      <MessageSquare size={18} style={{ color: '#64748B', flexShrink: 0, marginTop: '4px' }} />
+                      <MessageSquare size={18} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: '4px' }} />
                       {req.message}
                     </div>
 
@@ -188,7 +188,7 @@ const ContactRequests = () => {
                 );
               })
             ) : (
-              <div style={{ textAlign: 'center', padding: '100px', color: '#64748B' }}>
+              <div style={{ textAlign: 'center', padding: '100px', color: 'var(--text-muted)' }}>
                 <Mail size={48} style={{ marginBottom: '20px', opacity: 0.2 }} />
                 <p>No active inquiries in the mission grid.</p>
               </div>

@@ -40,12 +40,12 @@ const ResolvedIssues = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#000000',
+      background: 'var(--bg-primary)',
       backgroundImage: `
         radial-gradient(circle at 10% 10%, rgba(20, 190, 160, 0.1), transparent 45%),
         radial-gradient(circle at 90% 90%, rgba(0, 210, 255, 0.1), transparent 45%)
       `,
-      color: 'white',
+      color: 'var(--text-primary)',
       padding: '160px 40px 80px'
     }}>
       <style>{`
@@ -67,7 +67,7 @@ const ResolvedIssues = () => {
           border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
           padding: 12px 20px 12px 45px;
-          color: white;
+          color: var(--text-primary);
           width: 300px;
           outline: none;
           transition: all 0.3s ease;
@@ -100,7 +100,7 @@ const ResolvedIssues = () => {
               <ChevronLeft size={20} /> Back to Dashboard
             </button>
             <h1 style={{ fontSize: '32px', fontWeight: 900, margin: 0, letterSpacing: '-1px' }}>Resolved Issues History</h1>
-            <p style={{ color: '#94A3B8', marginTop: '5px' }}>Historical log of all successfully neutralized urban anomalies</p>
+            <p style={{ color: 'var(--text-muted)', marginTop: '5px' }}>Historical log of all successfully neutralized urban anomalies</p>
           </div>
 
           <div style={{ position: 'relative' }}>
@@ -116,7 +116,7 @@ const ResolvedIssues = () => {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '100px', color: '#94A3B8' }}>Executing historical data retrieval...</div>
+          <div style={{ textAlign: 'center', padding: '100px', color: 'var(--text-muted)' }}>Executing historical data retrieval...</div>
         ) : filteredItems.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
@@ -124,7 +124,7 @@ const ResolvedIssues = () => {
             background: 'rgba(255,255,255,0.02)', 
             borderRadius: '20px',
             border: '1px dashed rgba(255,255,255,0.1)',
-            color: '#94A3B8'
+            color: 'var(--text-muted)'
           }}>
             <CheckCircle size={48} style={{ marginBottom: '20px', opacity: 0.3 }} />
             <p>No matching resolved anomalies found in mission logs.</p>
@@ -144,17 +144,17 @@ const ResolvedIssues = () => {
 
                 <div style={{ marginBottom: '18px' }}>
                   <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '5px' }}>{item.area || item.location_name || 'General Node'}</h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#94A3B8', fontSize: '13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-muted)', fontSize: '13px' }}>
                     <MapPin size={14} /> {item.location_name || 'Coordinate mapping active'}
                   </div>
                 </div>
 
                 <div style={{ 
                   padding: '12px', 
-                  background: 'rgba(0,0,0,0.2)', 
+                  background: 'rgba(15, 23, 42, 0.08)', 
                   borderRadius: '12px', 
                   fontSize: '13px', 
-                  color: '#CBD5E1',
+                  color: 'var(--text-primary)',
                   marginBottom: '18px',
                   borderLeft: '2px solid rgba(255,255,255,0.1)'
                 }}>
@@ -168,7 +168,7 @@ const ResolvedIssues = () => {
                     gap: '5px', 
                     fontSize: '11px', 
                     fontWeight: 700,
-                    color: item.severity === 'high' ? 'var(--coral)' : '#94A3B8',
+                    color: item.severity === 'high' ? 'var(--coral)' : 'var(--text-muted)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>

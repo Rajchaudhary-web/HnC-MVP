@@ -15,7 +15,26 @@ import './index.css';
 // Wrapper to handle Loader on route changes
 const AppContent = () => {
   const [loading, setLoading] = useState(false);
+  const [theme, setTheme] = useState("dark");
   const location = useLocation();
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) {
+      setTheme(saved);
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const isLandingPage = location.pathname === "/";
+    if (isLandingPage) return;
+
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
 
   // Show loader when navigating to certain high-performance sections
   useEffect(() => {
@@ -41,6 +60,29 @@ const AppContent = () => {
 
   return (
     <>
+      {/* Theme Toggle Button - Hidden on Landing Page */}
+      {location.pathname !== "/" && (
+        <button
+          onClick={toggleTheme}
+          style={{
+            position: "fixed",
+            top: "20px",
+            right: "20px",
+            zIndex: 9999,
+            padding: "10px 16px",
+            borderRadius: "10px",
+            border: "none",
+            cursor: "pointer",
+            background: "var(--electric-blue)",
+            color: "white",
+            fontWeight: "700",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+          }}
+        >
+          {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
+        </button>
+      )}
+
       <Navbar />
       <Routes>
         <Route path="/" element={<LandingPage />} />

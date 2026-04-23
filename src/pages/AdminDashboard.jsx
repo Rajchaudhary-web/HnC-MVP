@@ -80,13 +80,12 @@ const StatCard = ({ icon: Icon, label, value, color }) => {
       </div>
 
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ color: '#94A3B8', fontSize: '13px', marginBottom: '8px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>{label}</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '8px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>{label}</div>
         <div style={{
           fontSize: '32px',
           fontWeight: 900,
           letterSpacing: '-1.5px',
-          color: 'white',
-          textShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+          color: 'var(--text-primary)',
           display: 'flex',
           alignItems: 'baseline',
           gap: '4px'
@@ -375,7 +374,7 @@ const AdminDashboard = () => {
       height: '100vh',
       overflow: 'hidden',
       overflowX: 'hidden',
-      background: '#000000',
+      background: 'var(--bg-primary)',
       backgroundImage: `
         radial-gradient(circle at 10% 10%, rgba(0, 210, 255, 0.15), transparent 45%),
         radial-gradient(circle at 90% 15%, rgba(140, 90, 255, 0.12), transparent 45%),
@@ -383,7 +382,7 @@ const AdminDashboard = () => {
         radial-gradient(circle at 85% 70%, rgba(240, 70, 150, 0.07), transparent 40%)
       `,
       animation: 'drift 20s infinite alternate ease-in-out',
-      color: 'white',
+      color: 'var(--text-primary)',
       position: 'relative'
     }}>
       <style>{`
@@ -561,9 +560,9 @@ const AdminDashboard = () => {
         height: '100vh',
         position: 'sticky',
         top: 0,
-        background: 'rgba(2, 6, 23, 0.8)',
+        background: 'var(--bg-primary)',
         backdropFilter: 'blur(40px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+        borderRight: '1px solid var(--border-color)',
         boxShadow: '10px 0 50px rgba(0,0,0,0.5)',
         padding: '30px 20px',
         display: 'flex',
@@ -593,7 +592,7 @@ const AdminDashboard = () => {
               padding: '12px 15px',
               borderRadius: '12px',
               cursor: item.route !== '#' ? 'pointer' : 'default',
-              color: location.pathname === item.route ? 'var(--teal)' : '#94A3B8',
+              color: location.pathname === item.route ? 'var(--teal)' : 'var(--text-muted)',
               fontWeight: location.pathname === item.route ? 600 : 400,
               opacity: item.route === '#' ? 0.6 : 1
             }}>
@@ -630,7 +629,7 @@ const AdminDashboard = () => {
               <ChevronLeft size={16} /> Back to Neural Grid
             </button>
             <h1 className="gradient-text" style={{ fontSize: '28px', fontWeight: 900, marginBottom: '5px', letterSpacing: '-1px' }}>Municipal Overview</h1>
-            <p style={{ color: '#94A3B8', fontWeight: 600, fontSize: '14px' }}>Real-time sewage systems orchestration status</p>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '14px' }}>Real-time sewage systems orchestration status</p>
           </div>
           <button className="btn btn-secondary" style={{ backdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 0 15px rgba(255, 255, 255, 0.05)' }}>Download OS Report</button>
         </div>
@@ -667,7 +666,7 @@ const AdminDashboard = () => {
                       gap: '10px'
                     }}
                   >
-                    <span style={{ fontWeight: 800, color: 'white' }}>{area.name}</span>
+                    <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{area.name}</span>
                     <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)' }} />
                     <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{area.count} {area.count === 1 ? 'report' : 'reports'}</span>
                     {area.high > 0 && (
@@ -694,7 +693,7 @@ const AdminDashboard = () => {
                       background: 'rgba(255, 255, 255, 0.03)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: '8px',
-                      color: '#94A3B8',
+                      color: 'var(--text-muted)',
                       fontSize: '12px',
                       padding: '5px 10px',
                       outline: 'none',
@@ -714,7 +713,7 @@ const AdminDashboard = () => {
                       background: 'rgba(255, 255, 255, 0.03)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: '8px',
-                      color: '#94A3B8',
+                      color: 'var(--text-muted)',
                       fontSize: '12px',
                       padding: '5px 10px',
                       outline: 'none',
@@ -766,11 +765,11 @@ const AdminDashboard = () => {
             </div>
             {console.log("Reports in State:", reports)}
             {loading ? (
-              <div style={{ padding: '20px', color: '#94A3B8' }}>Loading reports...</div>
+              <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Loading reports...</div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 10px' }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', color: '#94A3B8', fontSize: '13px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px', borderBottom: '1px solid var(--border-color)' }}>
                     <th style={{ padding: '0 15px 10px', fontWeight: 600 }}>Location</th>
                     <th style={{ padding: '0 15px 10px', fontWeight: 600 }}>Priority</th>
                     <th style={{ padding: '0 15px 10px', fontWeight: 600 }}>Severity</th>
@@ -782,7 +781,7 @@ const AdminDashboard = () => {
                 <tbody>
                   {sortedReports.length === 0 ? (
                     <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8', fontStyle: 'italic', fontSize: '15px' }}>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '15px' }}>
                         All urban systems are currently stable. No active issues 🚀
                       </td>
                     </tr>
@@ -795,7 +794,7 @@ const AdminDashboard = () => {
 
                       return (
                         <tr key={report.id} className="report-row" style={{ 
-                          background: 'rgba(15, 23, 42, 0.6)', 
+                          background: 'var(--bg-card)', 
                           borderRadius: '12px',
                           boxShadow: report.status !== 'resolved' ? prioStyle.glow : 'none',
                           border: report.status !== 'resolved' && priorityScore >= 4 ? '1px solid rgba(255, 82, 82, 0.2)' : 'none'
@@ -827,11 +826,11 @@ const AdminDashboard = () => {
                               boxShadow: `0 0 10px ${sevStyle.color}22`
                             }}>{sevStyle.text}</span>
                           </td>
-                          <td style={{ padding: '15px', color: '#94A3B8', fontSize: '13px' }}>{getTimeAgo(report.created_at)}</td>
+                          <td style={{ padding: '15px', color: 'var(--text-muted)', fontSize: '13px' }}>{getTimeAgo(report.created_at)}</td>
                           <td style={{ padding: '15px' }}>
                             {assignedWorkerName ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <span style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>{assignedWorkerName}</span>
+                                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{assignedWorkerName}</span>
                                 <span style={{
                                   fontSize: '10px',
                                   fontWeight: 800,
@@ -848,7 +847,7 @@ const AdminDashboard = () => {
                                 </span>
                               </div>
                             ) : (
-                              <span style={{ color: '#64748B', fontStyle: 'italic', fontSize: '13px' }}>Dispatcher Pending</span>
+                              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '13px' }}>Dispatcher Pending</span>
                             )}
                           </td>
                           <td style={{ padding: '15px', borderTopRightRadius: '12px', borderBottomRightRadius: '12px', position: 'relative', zIndex: 1 }}>
@@ -872,8 +871,8 @@ const AdminDashboard = () => {
                                       padding: '10px 16px',
                                       borderRadius: '10px',
                                       fontSize: '13px',
-                                      background: '#0F172A',
-                                      color: 'white',
+                                      background: 'var(--bg-card)',
+                                      color: 'var(--text-primary)',
                                       border: '1px solid var(--electric-blue)',
                                       width: '200px',
                                       cursor: 'pointer',
@@ -882,7 +881,7 @@ const AdminDashboard = () => {
                                     onChange={(e) => handleAssign(report.id, e.target.value)}
                                   >
                                     <option value="">{assigningId === report.id ? 'Dispatching...' : 'Assign Responder...'}</option>
-                                    {WORKERS.map(w => <option key={w.id} value={w.id} style={{ background: '#0F172A' }}>{w.name}</option>)}
+                                    {WORKERS.map(w => <option key={w.id} value={w.id} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}>{w.name}</option>)}
                                   </select>
                                 </div>
                               )
@@ -913,7 +912,7 @@ const AdminDashboard = () => {
               ].map(item => (
                 <div key={item.label}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                    <span style={{ color: '#94A3B8', fontWeight: 500 }}>{item.label}</span>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{item.label}</span>
                     <span style={{ color: 'var(--teal)', fontWeight: 700 }}>{item.val}% efficiency</span>
                   </div>
                   <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '4px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
@@ -939,14 +938,14 @@ const AdminDashboard = () => {
             </h3>
 
             {leadsLoading ? (
-              <div style={{ padding: '20px', color: '#94A3B8' }}>Loading requests...</div>
+              <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Loading requests...</div>
             ) : leads.length === 0 ? (
-              <div style={{ padding: '20px', color: '#94A3B8', textAlign: 'center' }}>No demo requests yet</div>
+              <div style={{ padding: '20px', color: 'var(--text-muted)', textAlign: 'center' }}>No demo requests yet</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
                 {leads.map((lead) => (
                   <div key={lead.id} className="lead-card" style={{
-                    background: 'rgba(15, 23, 42, 0.4)',
+                    background: 'var(--bg-card)',
                     padding: '25px',
                     borderRadius: '20px',
                     display: 'flex',
@@ -957,21 +956,21 @@ const AdminDashboard = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--teal)', fontWeight: 700, fontSize: '15px' }}>
                         <User size={16} /> {lead.name}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
                         <Calendar size={12} /> {getTimeAgo(lead.created_at)}
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94A3B8', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
                       <Mail size={14} /> {lead.email}
                     </div>
 
                     <div style={{
                       padding: '15px',
-                      background: 'rgba(0, 0, 0, 0.2)',
+                      background: 'rgba(15, 23, 42, 0.08)',
                       borderRadius: '12px',
                       fontSize: '13px',
-                      color: '#CBD5E1',
+                      color: 'var(--text-primary)',
                       lineHeight: '1.6',
                       fontStyle: 'italic',
                       borderLeft: '2px solid var(--teal)'
