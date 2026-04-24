@@ -8,6 +8,9 @@ const WorkerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState(null);
   const [transitioningIds, setTransitioningIds] = useState(new Set());
+  const [viewMode, setViewMode] = useState('single'); // 'single' | 'all'
+  const [allWorkers, setAllWorkers] = useState([]);
+  const [workerStats, setWorkerStats] = useState([]);
   const navigate = useNavigate();
 
   const currentWorkerId = "80088469-b24f-4d94-bf03-a2c9d6cc346b"; // Raj Worker UUID
@@ -30,14 +33,58 @@ const WorkerDashboard = () => {
     }
   };
 
+  const fetchAllWorkersWithStats = async () => {
+    try {
+      const { data: workers, error } = await supabase
+        .from('workers')
+        .select('*');
+
+      if (error) throw error;
+
+      const workerData = await Promise.all(
+        workers.map(async (worker) => {
+          const { data: tasks } = await supabase
+            .from('reports')
+            .select('id, status')
+            .eq('assigned_to', worker.id)
+            .in('status', ['assigned', 'in_progress']);
+
+          const taskCount = tasks?.length || 0;
+
+          let workloadStatus = 'available';
+          if (taskCount >= 3) workloadStatus = 'busy';
+          else if (taskCount > 0) workloadStatus = 'working';
+
+          return {
+            ...worker,
+            taskCount,
+            workloadStatus
+          };
+        })
+      );
+
+      setAllWorkers(workerData);
+      setWorkerStats(workerData);
+    } catch (err) {
+      console.error('Worker stats fetch error:', err);
+    }
+  };
+
   useEffect(() => {
     fetchAssignedReports();
+    fetchAllWorkersWithStats();
 
     // Real-time synchronization
     const channel = supabase
       .channel('worker-assignments')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports', filter: `assigned_to=eq.${currentWorkerId}` }, (payload) => {
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reports', 
+        filter: `assigned_to=eq.${currentWorkerId}` 
+      }, (payload) => {
         fetchAssignedReports();
+        fetchAllWorkersWithStats(); // Also refresh stats on changes
       })
       .subscribe();
 
@@ -85,14 +132,55 @@ const WorkerDashboard = () => {
   const activeMissions = reports.filter(r => r.status !== 'resolved' || transitioningIds.has(r.id));
   const completedMissions = reports.filter(r => r.status === 'resolved' && !transitioningIds.has(r.id));
 
+  // --- HELPER: SLA COUNTDOWN ---
+  const getTimeLeft = (eta) => {
+    if (!eta) return null;
+
+    const now = Date.now();
+    const diff = eta - now;
+
+    if (diff <= 0) return "OVERDUE";
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    return `${hours}h ${minutes}m left`;
+  };
+
   /* --- SUBCOMPONENT: MISSION CARD --- */
   const MissionCardRow = ({ report, isResolved }) => {
     const severity = getSeverityStyle(report.severity);
     const isUpdating = actionId === report.id;
     const currentStatus = report.status || 'reported';
+    const isOverdue = report.eta && report.eta < Date.now() && !isResolved;
 
     return (
-      <div className="glass-card mission-transition" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>
+      <div 
+        className="glass-card mission-transition" 
+        style={{ 
+          padding: '32px', 
+          position: 'relative', 
+          overflow: 'hidden',
+          boxShadow: isOverdue ? '0 0 20px rgba(255, 82, 82, 0.25)' : undefined,
+          border: isOverdue ? '1px solid rgba(255, 82, 82, 0.4)' : '1px solid rgba(255,255,255,0.05)'
+        }}
+      >
+        {/* Severity Accent Strip */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '4px',
+          height: '100%',
+          background:
+            report.severity === 'high'
+              ? 'var(--coral-red)'
+              : report.severity === 'medium'
+              ? 'var(--vibrant-orange)'
+              : 'var(--neon-green)',
+          opacity: isResolved ? 0.3 : 1
+        }} />
+
         {/* Status Indicator */}
         <div style={{ 
           position: 'absolute', top: 0, right: 0, padding: '12px 24px', 
@@ -121,7 +209,15 @@ const WorkerDashboard = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
-              <Clock size={14} /> {new Date(report.created_at).toLocaleTimeString()}
+              <Clock size={14} /> 
+              <span style={{
+                color: report.eta && report.eta < Date.now()
+                  ? 'var(--coral-red)'
+                  : (report.eta ? 'var(--electric-blue)' : 'inherit'),
+                fontWeight: report.eta ? 800 : 600
+              }}>
+                {getTimeLeft(report.eta) || new Date(report.created_at).toLocaleTimeString()}
+              </span>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
               ID: #{report.id.slice(0, 8)} | <span style={{ color: 'var(--electric-blue)' }}>{currentStatus.toUpperCase()}</span>
@@ -165,6 +261,117 @@ const WorkerDashboard = () => {
     );
   };
 
+  if (viewMode === 'all') {
+    const total = workerStats.length;
+    const available = workerStats.filter(w => w.workloadStatus === 'available').length;
+    const working = workerStats.filter(w => w.workloadStatus === 'working').length;
+    const busy = workerStats.filter(w => w.workloadStatus === 'busy').length;
+
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        background: 'var(--bg-primary)', 
+        padding: '160px 40px', 
+        color: 'var(--text-primary)',
+        backgroundImage: `radial-gradient(circle at 10% 10%, rgba(41, 121, 255, 0.1), transparent 45%)`
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <button 
+            onClick={() => setViewMode('single')}
+            style={{ background: 'none', border: 'none', color: 'var(--electric-blue)', fontWeight: 700, cursor: 'pointer', marginBottom: '16px', padding: 0, display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <ChevronLeft size={18} /> Back to Terminal
+          </button>
+          
+          <h1 className="gradient-text" style={{ fontSize: '48px', fontWeight: 900, marginBottom: '10px' }}>
+            Workforce Control Center
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '18px', marginBottom: '40px' }}>Real-time coordination of autonomous urban responders</p>
+
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '40px' }}>
+            <button 
+              onClick={() => setViewMode('single')}
+              className="btn-neon"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)' }}
+            >
+              Single Worker
+            </button>
+            <button 
+              onClick={() => setViewMode('all')}
+              className="btn-neon"
+              style={{ background: 'rgba(41, 121, 255, 0.2)', border: '1px solid var(--electric-blue)' }}
+            >
+              All Workers
+            </button>
+          </div>
+
+          {/* Overview Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '60px' }}>
+            <div className="glass-card" style={{ padding: '30px', textAlign: 'center' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 800, letterSpacing: '2px', marginBottom: '10px' }}>TOTAL UNITS</div>
+              <div style={{ fontSize: '36px', fontWeight: 900 }}>{total}</div>
+            </div>
+            <div className="glass-card" style={{ padding: '30px', textAlign: 'center', borderBottom: '4px solid var(--neon-green)' }}>
+              <div style={{ color: 'var(--neon-green)', fontSize: '13px', fontWeight: 800, letterSpacing: '2px', marginBottom: '10px' }}>AVAILABLE</div>
+              <div style={{ fontSize: '36px', fontWeight: 900 }}>{available}</div>
+            </div>
+            <div className="glass-card" style={{ padding: '30px', textAlign: 'center', borderBottom: '4px solid var(--electric-blue)' }}>
+              <div style={{ color: 'var(--electric-blue)', fontSize: '13px', fontWeight: 800, letterSpacing: '2px', marginBottom: '10px' }}>WORKING</div>
+              <div style={{ fontSize: '36px', fontWeight: 900 }}>{working}</div>
+            </div>
+            <div className="glass-card" style={{ padding: '30px', textAlign: 'center', borderBottom: '4px solid var(--coral-red)' }}>
+              <div style={{ color: 'var(--coral-red)', fontSize: '13px', fontWeight: 800, letterSpacing: '2px', marginBottom: '10px' }}>BUSY</div>
+              <div style={{ fontSize: '36px', fontWeight: 900 }}>{busy}</div>
+            </div>
+          </div>
+
+          {/* Worker Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '24px' }}>
+            {workerStats.map(worker => (
+              <div key={worker.id} className="glass-card premium-hover" style={{ padding: '30px', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '4px' }}>{worker.name}</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', letterSpacing: '1px' }}>UNIT ID: {worker.id.slice(0, 8)}</p>
+                  </div>
+                  <div style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: 900,
+                    letterSpacing: '1px',
+                    background: worker.workloadStatus === 'available' ? 'rgba(0, 200, 83, 0.1)' : worker.workloadStatus === 'working' ? 'rgba(41, 121, 255, 0.1)' : 'rgba(255, 82, 82, 0.1)',
+                    color: worker.workloadStatus === 'available' ? 'var(--neon-green)' : worker.workloadStatus === 'working' ? 'var(--electric-blue)' : 'var(--coral-red)',
+                    border: `1px solid ${worker.workloadStatus === 'available' ? 'rgba(0,200,83,0.3)' : worker.workloadStatus === 'working' ? 'rgba(41,121,255,0.3)' : 'rgba(255,82,82,0.3)'}`
+                  }}>
+                    {worker.workloadStatus.toUpperCase()}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Load Balance</span>
+                      <span style={{ fontWeight: 800 }}>{worker.taskCount} / 3 Tasks</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ 
+                        width: `${Math.min((worker.taskCount / 3) * 100, 100)}%`, 
+                        height: '100%', 
+                        background: worker.workloadStatus === 'available' ? 'var(--neon-green)' : worker.workloadStatus === 'working' ? 'var(--electric-blue)' : 'var(--coral-red)',
+                        transition: 'width 1s ease'
+                      }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -186,6 +393,30 @@ const WorkerDashboard = () => {
             </button>
             <h1 className="gradient-text" style={{ fontSize: '42px', fontWeight: 900, marginBottom: '12px' }}>Responder Console</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '18px' }}>Active missions for <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>Raj Worker</span> (Unit: Alpha-1)</p>
+            
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+              <button 
+                onClick={() => setViewMode('single')}
+                className="btn-neon"
+                style={{ 
+                  background: viewMode === 'single' ? 'rgba(41, 121, 255, 0.2)' : 'rgba(255,255,255,0.05)',
+                  border: viewMode === 'single' ? '1px solid var(--electric-blue)' : '1px solid var(--border-color)'
+                }}
+              >
+                Single Worker
+              </button>
+
+              <button 
+                onClick={() => setViewMode('all')}
+                className="btn-neon"
+                style={{ 
+                  background: viewMode === 'all' ? 'rgba(41, 121, 255, 0.2)' : 'rgba(255,255,255,0.05)',
+                  border: viewMode === 'all' ? '1px solid var(--electric-blue)' : '1px solid var(--border-color)'
+                }}
+              >
+                All Workers
+              </button>
+            </div>
           </div>
           <div className="glass-card" style={{ padding: '15px 25px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ position: 'relative' }}>
@@ -202,6 +433,22 @@ const WorkerDashboard = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '60px' }}>
             
+            {/* Critical Issues Section */}
+            {reports.filter(r => r.eta && r.eta < Date.now() && r.status !== 'resolved').length > 0 && (
+              <section>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '24px' }}>
+                  <div style={{ padding: '10px', background: 'rgba(255, 82, 82, 0.1)', borderRadius: '12px', color: 'var(--coral-red)' }}><AlertTriangle size={20} /></div>
+                  <h2 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.5px', color: 'var(--coral-red)' }}>⚠️ Critical Alerts <span style={{ color: 'var(--text-muted)', fontSize: '16px', fontWeight: 500, marginLeft: '10px' }}>({reports.filter(r => r.eta && r.eta < Date.now() && r.status !== 'resolved').length})</span></h2>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))', gap: '24px' }}>
+                  {reports.filter(r => r.eta && r.eta < Date.now() && r.status !== 'resolved').map(report => (
+                    <MissionCardRow key={report.id} report={report} isResolved={false} />
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Active Missions Section */}
             <section>
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '24px' }}>

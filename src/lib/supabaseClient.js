@@ -58,16 +58,98 @@ export const createReport = async (reportData) => {
 
   // Ensure default status is 'reported'
   const finalStatus = 'reported';
+  const DEFAULT_ZONE_ID = "b46a8b33-c277-4fd8-8e2d-97b5e6ba6a5c";
 
+  // Calculate SLA deadline based on severity
+  const now = Date.now();
+  let deadline;
+  if (reportData.severity === 'high') {
+    deadline = now + (2 * 60 * 60 * 1000); // 2 hours
+  } else if (reportData.severity === 'medium') {
+    deadline = now + (6 * 60 * 60 * 1000); // 6 hours
+  } else {
+    deadline = now + (12 * 60 * 60 * 1000); // 12 hours
+  }
+
+  // STEP 1: Inject default zone_id and calculated SLA deadline into the insert
   const { data, error } = await supabase
     .from('reports')
-    .insert([{ ...reportData, status: finalStatus }])
+    .insert([{ 
+      ...reportData, 
+      status: finalStatus,
+      zone_id: DEFAULT_ZONE_ID,
+      eta: deadline
+    }])
     .select();
 
   if (error) {
     console.error('Supabase Insert Error:', error);
     throw error;
   }
+
+  // AUTO-ASSIGNMENT LOGIC (Non-blocking)
+  try {
+    // STEP 2: Extract inserted report
+    const newReport = data[0];
+    if (!newReport) return data;
+
+    // STEP 3: Fetch all workers globally (Removed zone-based filtering)
+    const { data: workers, error: workersError } = await supabase
+      .from('workers')
+      .select('*');
+
+    if (workersError || !workers || workers.length === 0) {
+      console.log('No workers found for global auto-assignment or fetch error:', workersError);
+      return data;
+    }
+
+    // STEP 4: For each worker, count active tasks
+    const workersWithLoad = await Promise.all(workers.map(async (worker) => {
+      const { count, error: countError } = await supabase
+        .from('reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('assigned_to', worker.id)
+        .in('status', ['assigned', 'in_progress']);
+      
+      return { ...worker, taskCount: count || 0 };
+    }));
+
+    console.log('Worker task counts:', workersWithLoad.map(w => ({ name: w.name, load: w.taskCount })));
+
+    // STEP 5 & 6: Filter (tasks < 3) and Sort by least tasks
+    const eligibleWorkers = workersWithLoad
+      .filter(w => w.taskCount < 3)
+      .sort((a, b) => a.taskCount - b.taskCount);
+
+    // STEP 7: Pick first worker
+    const selectedWorker = eligibleWorkers[0];
+
+    // STEP 8: If selectedWorker exists, update the report
+    if (selectedWorker) {
+      console.log('Selected Worker for auto-assignment:', selectedWorker.name);
+      
+      const { error: updateError } = await supabase
+        .from('reports')
+        .update({
+          assigned_to: selectedWorker.id,
+          status: 'assigned',
+          assigned_at: new Date().toISOString()
+        })
+        .eq('id', newReport.id);
+
+      if (updateError) {
+        console.error('Post-creation auto-assignment update failed:', updateError);
+      }
+    } else {
+      console.log('No eligible workers found (all over-burdened or none filtered).');
+    }
+
+  } catch (autoAssignErr) {
+    // STEP 9 (Implicit) & Safety: Log and continue
+    console.error('Fatal error during auto-assignment logic:', autoAssignErr);
+  }
+
+  // STEP 10: Ensure function still returns original data
   return data;
 };
 
