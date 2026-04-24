@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin, Zap } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase, updateReportStatus, assignReport } from '../lib/supabaseClient';
+import { supabase, updateReportStatus, assignReport, simulateReports } from '../lib/supabaseClient';
 
 const StatCard = ({ icon: Icon, label, value, color }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -126,6 +126,23 @@ const AdminDashboard = () => {
   const [selectedSeverity, setSelectedSeverity] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
+  // --- INTELLIGENT INSIGHTS ENGINE ---
+  const insights = useMemo(() => {
+    const highPriority = reports.filter(r => r.severity === 'high' && r.status !== 'resolved').length;
+
+    const nearDeadline = reports.filter(r => {
+      if (!r.eta || !r.created_at || r.status === 'resolved') return false;
+      const created = new Date(r.created_at).getTime();
+      const deadline = created + (r.eta * 60 * 1000);
+      const remaining = deadline - Date.now();
+      return remaining < (30 * 60 * 1000) && remaining > 0;
+    }).length;
+
+    return { highPriority, nearDeadline };
+  }, [reports]);
+
+  const [currentTheme, setCurrentTheme] = useState(document.documentElement.getAttribute("data-theme") || "dark");
+
   const fetchReports = async () => {
     try {
       if (reports.length === 0) setLoading(true);
@@ -141,7 +158,7 @@ const AdminDashboard = () => {
           ...r,
           area: extractArea(r.location_name)
         }));
-        
+
         // Stabilize UI by preventing redundant state updates if data is identical
         if (
           prev.length === newData.length &&
@@ -311,6 +328,7 @@ const AdminDashboard = () => {
       return 0;
     });
   }, [filteredReports, sortBy]);
+
 
   // Derived priority scores for individual row styling
   const getPriorityScore = (report) => {
@@ -581,9 +599,9 @@ const AdminDashboard = () => {
           { label: 'Messages', icon: MessageSquare, route: '#' },
           { label: 'Settings', icon: Settings, route: '#' },
         ].map((item) => (
-          <div 
-            key={item.label} 
-            className={`sidebar-item ${location.pathname === item.route ? 'active' : ''}`} 
+          <div
+            key={item.label}
+            className={`sidebar-item ${location.pathname === item.route ? 'active' : ''}`}
             onClick={() => item.route !== '#' && navigate(item.route)}
             style={{
               display: 'flex',
@@ -631,13 +649,88 @@ const AdminDashboard = () => {
             <h1 className="gradient-text" style={{ fontSize: '28px', fontWeight: 900, marginBottom: '5px', letterSpacing: '-1px' }}>Municipal Overview</h1>
             <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '14px' }}>Real-time sewage systems orchestration status</p>
           </div>
-          <button className="btn btn-secondary" style={{ backdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 0 15px rgba(255, 255, 255, 0.05)' }}>Download OS Report</button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button
+              onClick={() => {
+                const newTheme = currentTheme === "dark" ? "light" : "dark";
+                document.documentElement.setAttribute("data-theme", newTheme);
+                localStorage.setItem("theme", newTheme);
+                setCurrentTheme(newTheme);
+              }}
+              className="btn-neon btn-blue"
+              style={{
+                padding: '10px 20px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {currentTheme === "dark" ? <Clock size={14} /> : <Zap size={14} />} 
+              {currentTheme === "dark" ? "Light Mode" : "Dark Mode"}
+            </button>
+            <button
+              onClick={simulateReports}
+              className="btn-neon btn-blue"
+              style={{
+                padding: '10px 20px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <Zap size={14} /> Simulate Live Incidents
+            </button>
+          </div>
+        </div>
+
+        {/* Intelligent Insights Panel */}
+        <div className="glass-card premium-hover" style={{
+          padding: '24px',
+          marginBottom: '32px',
+          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(41, 121, 255, 0.05) 100%)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: '20px'
+        }}>
+          <div style={{ display: 'flex', gap: '40px', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '8px' }}>Neural Insights</h3>
+              <div style={{ display: 'flex', gap: '30px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ padding: '8px', background: 'rgba(255, 82, 82, 0.1)', borderRadius: '10px', color: 'var(--coral)' }}><AlertTriangle size={18} /></div>
+                  <span style={{ fontWeight: 800, fontSize: '15px' }}>{insights.highPriority} High Priority Issues</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ padding: '8px', background: 'rgba(255, 109, 0, 0.1)', borderRadius: '10px', color: 'var(--orange)' }}><Clock size={18} /></div>
+                  <span style={{ fontWeight: 800, fontSize: '15px' }}>{insights.nearDeadline} Nearing SLA Breach</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: 'var(--neon-green)', fontWeight: 800, fontSize: '11px', letterSpacing: '1px' }}>SYSTEM HEALTH: OPTIMAL</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Autonomous Grid Monitoring Active</div>
+          </div>
         </div>
 
         {/* Stats */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
-          <StatCard icon={AlertTriangle} label="Active Issues" value={sortedReports.length} color="var(--coral)" />
-          <StatCard icon={CheckCircle} label="Resolved Today" value={reports.filter(r => r.status === 'resolved').length} color="var(--sage)" />
+          <StatCard
+            icon={AlertTriangle}
+            label="Active Issues"
+            value={reports.filter(r => r.status === 'assigned' || r.status === 'in_progress').length}
+            color="var(--coral)"
+          />
+          <StatCard
+            icon={CheckCircle}
+            label="Resolved missions"
+            value={reports.filter(r => r.status === 'resolved').length}
+            color="var(--sage)"
+          />
           <StatCard icon={Clock} label="Avg Response Time" value="18.5m" color="var(--orange)" />
           <StatCard icon={TrendingUp} label="High-Risk Zones" value="3" color="var(--teal)" />
         </div>
@@ -645,7 +738,7 @@ const AdminDashboard = () => {
         {/* Middle Section */}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px', marginBottom: '40px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '40px', alignItems: 'start' }}>
           <div className="glass-card dashboard-card" style={{ padding: '30px' }}>
-            
+
             {/* Area Intelligence Bar */}
             <div style={{ marginBottom: '32px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '24px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -653,7 +746,7 @@ const AdminDashboard = () => {
               </h3>
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 {topAreas.slice(0, 5).map((area) => (
-                  <div 
+                  <div
                     key={area.name}
                     style={{
                       padding: '12px 20px',
@@ -670,9 +763,9 @@ const AdminDashboard = () => {
                     <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)' }} />
                     <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{area.count} {area.count === 1 ? 'report' : 'reports'}</span>
                     {area.high > 0 && (
-                      <span style={{ 
-                        padding: '2px 6px', background: 'rgba(255, 82, 82, 0.1)', color: 'var(--coral-red)', 
-                        borderRadius: '4px', fontSize: '10px', fontWeight: 800 
+                      <span style={{
+                        padding: '2px 6px', background: 'rgba(255, 82, 82, 0.1)', color: 'var(--coral-red)',
+                        borderRadius: '4px', fontSize: '10px', fontWeight: 800
                       }}>
                         {area.high} HIGH
                       </span>
@@ -686,7 +779,7 @@ const AdminDashboard = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <h3 style={{ letterSpacing: '0.5px', margin: 0 }}>Recent Reports</h3>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <select 
+                  <select
                     value={selectedStatus}
                     onChange={(e) => setSelectedStatus(e.target.value)}
                     style={{
@@ -706,7 +799,7 @@ const AdminDashboard = () => {
                     <option value="in_progress">In Progress</option>
                     <option value="resolved">Resolved</option>
                   </select>
-                  <select 
+                  <select
                     value={selectedSeverity}
                     onChange={(e) => setSelectedSeverity(e.target.value)}
                     style={{
@@ -724,13 +817,13 @@ const AdminDashboard = () => {
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
-                  
+
                   {/* Sort Controls */}
-                  <select 
-                    value={sortBy} 
+                  <select
+                    value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    style={{ 
-                      padding: '8px', 
+                    style={{
+                      padding: '8px',
                       borderRadius: '8px',
                       background: 'rgba(41, 121, 255, 0.05)',
                       border: '1px solid rgba(41, 121, 255, 0.2)',
@@ -793,8 +886,8 @@ const AdminDashboard = () => {
                       const assignedWorkerName = workers.find(w => w.id === report.assigned_to)?.name || report.assigned_to;
 
                       return (
-                        <tr key={report.id} className="report-row" style={{ 
-                          background: 'var(--bg-card)', 
+                        <tr key={report.id} className="report-row" style={{
+                          background: 'var(--bg-card)',
                           borderRadius: '12px',
                           boxShadow: report.status !== 'resolved' ? prioStyle.glow : 'none',
                           border: report.status !== 'resolved' && priorityScore >= 4 ? '1px solid rgba(255, 82, 82, 0.2)' : 'none'
@@ -956,7 +1049,7 @@ const AdminDashboard = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--teal)', fontWeight: 700, fontSize: '15px' }}>
                         <User size={16} /> {lead.name}
                       </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
                         <Calendar size={12} /> {getTimeAgo(lead.created_at)}
                       </div>
                     </div>

@@ -25,6 +25,56 @@ const STATUS_STAGES = {
 };
 
 /**
+ * AUTO-ASSIGNMENT ENGINE: Identifies least-burdened worker and dispatches them to a report.
+ * Filtered by workload capacity (max 3 active tasks).
+ */
+export const autoAssignWorker = async (reportId) => {
+  try {
+    // 1. Fetch all workers globally
+    const { data: workers, error: workersError } = await supabase
+      .from('workers')
+      .select('*');
+
+    if (workersError || !workers || workers.length === 0) return;
+
+    // 2. Map workers to their current active workload
+    const workersWithLoad = await Promise.all(workers.map(async (worker) => {
+      const { count } = await supabase
+        .from('reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('assigned_to', worker.id)
+        .in('status', ['assigned', 'in_progress']);
+      
+      return { ...worker, taskCount: count || 0 };
+    }));
+
+    // 3. Select worker with the lowest task count (must be under 3 tasks)
+    const eligibleWorkers = workersWithLoad
+      .filter(w => w.taskCount < 3)
+      .sort((a, b) => a.taskCount - b.taskCount);
+
+    const selectedWorker = eligibleWorkers[0];
+
+    if (selectedWorker) {
+      console.log(`📡 Auto-dispatching incident ${reportId} to ${selectedWorker.name}`);
+      
+      await supabase
+        .from('reports')
+        .update({
+          assigned_to: selectedWorker.id,
+          status: 'assigned',
+          assigned_at: new Date().toISOString()
+        })
+        .eq('id', reportId);
+    } else {
+      console.warn("⚠️ ALL RESPONDERS AT FULL CAPACITY: Manual orchestration required for incident", reportId);
+    }
+  } catch (err) {
+    console.error("Critical Failure in Auto-Assignment Engine:", err);
+  }
+};
+
+/**
  * Fetch all reports from the 'reports' table ordered by creation date
  */
 export const getReports = async () => {
@@ -60,15 +110,14 @@ export const createReport = async (reportData) => {
   const finalStatus = 'reported';
   const DEFAULT_ZONE_ID = "b46a8b33-c277-4fd8-8e2d-97b5e6ba6a5c";
 
-  // Calculate SLA deadline based on severity
-  const now = Date.now();
-  let deadline;
+  // Calculate SLA deadline based on severity (in minutes)
+  let deadlineMinutes;
   if (reportData.severity === 'high') {
-    deadline = now + (2 * 60 * 60 * 1000); // 2 hours
+    deadlineMinutes = 120; // 2 hours
   } else if (reportData.severity === 'medium') {
-    deadline = now + (6 * 60 * 60 * 1000); // 6 hours
+    deadlineMinutes = 360; // 6 hours
   } else {
-    deadline = now + (12 * 60 * 60 * 1000); // 12 hours
+    deadlineMinutes = 720; // 12 hours
   }
 
   // STEP 1: Inject default zone_id and calculated SLA deadline into the insert
@@ -78,7 +127,7 @@ export const createReport = async (reportData) => {
       ...reportData, 
       status: finalStatus,
       zone_id: DEFAULT_ZONE_ID,
-      eta: deadline
+      eta: deadlineMinutes
     }])
     .select();
 
@@ -87,69 +136,11 @@ export const createReport = async (reportData) => {
     throw error;
   }
 
-  // AUTO-ASSIGNMENT LOGIC (Non-blocking)
-  try {
-    // STEP 2: Extract inserted report
-    const newReport = data[0];
-    if (!newReport) return data;
-
-    // STEP 3: Fetch all workers globally (Removed zone-based filtering)
-    const { data: workers, error: workersError } = await supabase
-      .from('workers')
-      .select('*');
-
-    if (workersError || !workers || workers.length === 0) {
-      console.log('No workers found for global auto-assignment or fetch error:', workersError);
-      return data;
-    }
-
-    // STEP 4: For each worker, count active tasks
-    const workersWithLoad = await Promise.all(workers.map(async (worker) => {
-      const { count, error: countError } = await supabase
-        .from('reports')
-        .select('*', { count: 'exact', head: true })
-        .eq('assigned_to', worker.id)
-        .in('status', ['assigned', 'in_progress']);
-      
-      return { ...worker, taskCount: count || 0 };
-    }));
-
-    console.log('Worker task counts:', workersWithLoad.map(w => ({ name: w.name, load: w.taskCount })));
-
-    // STEP 5 & 6: Filter (tasks < 3) and Sort by least tasks
-    const eligibleWorkers = workersWithLoad
-      .filter(w => w.taskCount < 3)
-      .sort((a, b) => a.taskCount - b.taskCount);
-
-    // STEP 7: Pick first worker
-    const selectedWorker = eligibleWorkers[0];
-
-    // STEP 8: If selectedWorker exists, update the report
-    if (selectedWorker) {
-      console.log('Selected Worker for auto-assignment:', selectedWorker.name);
-      
-      const { error: updateError } = await supabase
-        .from('reports')
-        .update({
-          assigned_to: selectedWorker.id,
-          status: 'assigned',
-          assigned_at: new Date().toISOString()
-        })
-        .eq('id', newReport.id);
-
-      if (updateError) {
-        console.error('Post-creation auto-assignment update failed:', updateError);
-      }
-    } else {
-      console.log('No eligible workers found (all over-burdened or none filtered).');
-    }
-
-  } catch (autoAssignErr) {
-    // STEP 9 (Implicit) & Safety: Log and continue
-    console.error('Fatal error during auto-assignment logic:', autoAssignErr);
+  // Immediately trigger the centralized auto-assignment engine
+  if (data && data.length > 0) {
+    autoAssignWorker(data[0].id); // Non-blocking
   }
 
-  // STEP 10: Ensure function still returns original data
   return data;
 };
 
@@ -159,45 +150,22 @@ export const createReport = async (reportData) => {
  * @param {string} nextStatus - The new status to transition to
  */
 export const updateReportStatus = async (id, nextStatus) => {
-  if (!supabase) {
-    throw new Error('Supabase client not initialized.');
-  }
+  if (!supabase) throw new Error('Supabase client not initialized.');
 
-  // 1. Fetch current status to validate transition
-  const { data: current, error: fetchError } = await supabase
-    .from('reports')
-    .select('status')
-    .eq('id', id)
-    .single();
+  const updates = { status: nextStatus };
 
-  if (fetchError) throw fetchError;
-
-  const currentStatus = (current.status === 'pending' || current.status === 'new') ? 'reported' : (current.status || 'reported');
-  
-  // 2. Validate transition (prevent going backwards or skipping stages except for direct assignment)
-  // We allow transition if nextStatus is one step ahead in the lifecycle
-  const currentStage = STATUS_STAGES[currentStatus] ?? 0;
-  const nextStage = STATUS_STAGES[nextStatus] ?? 0;
-
-  if (nextStage <= currentStage && currentStatus !== 'reported') {
-    console.warn(`Invalid transition attempt: ${currentStatus} -> ${nextStatus}`);
-    // still proceed if it's already in that status (idempotency)
-    if (currentStatus === nextStatus) return current; 
-    throw new Error(`Cannot transition from ${currentStatus} to ${nextStatus}`);
-  }
-
-  // 3. Perform update
   const { data, error } = await supabase
     .from('reports')
-    .update({ status: nextStatus })
+    .update(updates)
     .eq('id', id)
     .select()
     .single();
 
   if (error) {
-    console.error('Error updating status:', error);
+    console.error('Status Update Error:', error);
     throw error;
   }
+
   return data;
 };
 
@@ -296,3 +264,86 @@ export const updateContactStatus = async (id, status) => {
   }
 };
 
+
+/**
+ * SIMULATION ENGINE: Create realistic demo reports for system stress-testing
+ * Generates 6 reports with varied severity, SLAs, and staggered locations.
+ */
+export const simulateReports = async () => {
+  const now = Date.now();
+  const DEFAULT_ZONE_ID = "b46a8b33-c277-4fd8-8e2d-97b5e6ba6a5c";
+
+  const fakeReports = [
+    {
+      title: "Sewage Overflow",
+      severity: "high",
+      description: "Critical overflow near residential block Alpha. Potential health hazard.",
+      location_name: "Sector A, Grid 402",
+      latitude: 28.6139 + Math.random() * 0.01,
+      longitude: 77.2090 + Math.random() * 0.01
+    },
+    {
+      title: "Drain Blockage",
+      severity: "medium",
+      description: "Water clogging in main street causing traffic diversion.",
+      location_name: "Sector B, Node 105",
+      latitude: 28.6139 + Math.random() * 0.01,
+      longitude: 77.2090 + Math.random() * 0.01
+    },
+    {
+      title: "Pipeline Leak",
+      severity: "low",
+      description: "Minor leakage reported in secondary supply line.",
+      location_name: "Sector C, Junction 88",
+      latitude: 28.6139 + Math.random() * 0.01,
+      longitude: 77.2090 + Math.random() * 0.01
+    }
+  ];
+
+  console.log("🚀 Initiating Urban Simulation: Deploying realistic anomalies...");
+
+  for (let i = 0; i < 6; i++) {
+    const reportTemplate = fakeReports[Math.floor(Math.random() * fakeReports.length)];
+
+    // Calculate SLA deadline based on severity (in minutes)
+    let deadlineMinutes;
+    if (reportTemplate.severity === 'high') {
+      deadlineMinutes = 120; // 2 hours
+    } else if (reportTemplate.severity === 'medium') {
+      deadlineMinutes = 360; // 6 hours
+    } else {
+      deadlineMinutes = 720; // 12 hours
+    }
+
+    try {
+      const { data, error } = await supabase.from('reports').insert([{
+        title: reportTemplate.title || "Sewage Issue",
+        description: reportTemplate.description || "Auto-generated simulation record",
+        severity: reportTemplate.severity || "medium",
+        priority: reportTemplate.severity || "medium", // Added priority to match schema requirements
+        status: "reported",
+        latitude: reportTemplate.latitude || 28.6139,
+        longitude: reportTemplate.longitude || 77.2090,
+        location_name: reportTemplate.location_name || "Unknown Area",
+        area: "Demo Zone",
+        zone_id: DEFAULT_ZONE_ID,
+        eta: deadlineMinutes
+      }]).select();
+
+      if (error) throw error;
+      console.log(`✅ Simulation Incident ${i+1} Materialized: ${reportTemplate.title}`);
+
+      // Immediately trigger the centralized auto-assignment engine
+      if (data && data.length > 0) {
+        autoAssignWorker(data[0].id); // Non-blocking
+      }
+    } catch (err) {
+      console.error("❌ FULL INSERT ERROR:", err);
+    }
+
+    // Randomized temporal delay (1.0s - 2.0s) for realistic, human-like telemetry flow
+    await new Promise(res => setTimeout(res, 1000 + Math.random() * 1000));
+  }
+
+  console.log("🏁 Simulation Complete: 6 High-Fidelity Records Synchronized.");
+};

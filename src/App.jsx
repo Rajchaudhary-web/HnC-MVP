@@ -60,30 +60,7 @@ const AppContent = () => {
 
   return (
     <>
-      {/* Theme Toggle Button - Hidden on Landing Page */}
-      {location.pathname !== "/" && (
-        <button
-          onClick={toggleTheme}
-          style={{
-            position: "fixed",
-            top: "20px",
-            right: "20px",
-            zIndex: 9999,
-            padding: "10px 16px",
-            borderRadius: "10px",
-            border: "none",
-            cursor: "pointer",
-            background: "var(--electric-blue)",
-            color: "white",
-            fontWeight: "700",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
-          }}
-        >
-          {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
-        </button>
-      )}
-
-      <Navbar />
+      <Navbar theme={theme} toggleTheme={toggleTheme} />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/admin" element={<AdminDashboard />} />

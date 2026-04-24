@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, AlertTriangle, Clock, MapPin, ChevronLeft, Activity, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, updateReportStatus } from '../lib/supabaseClient';
@@ -9,11 +9,13 @@ const WorkerDashboard = () => {
   const [actionId, setActionId] = useState(null);
   const [transitioningIds, setTransitioningIds] = useState(new Set());
   const [viewMode, setViewMode] = useState('single'); // 'single' | 'all'
+  const [selectedWorkerId, setSelectedWorkerId] = useState("80088469-b24f-4d94-bf03-a2c9d6cc346b");
   const [allWorkers, setAllWorkers] = useState([]);
   const [workerStats, setWorkerStats] = useState([]);
+  const [assigningIds, setAssigningIds] = useState(new Set());
+  const fetchTimeoutRef = useRef(null);
   const navigate = useNavigate();
 
-  const currentWorkerId = "80088469-b24f-4d94-bf03-a2c9d6cc346b"; // Raj Worker UUID
 
   const fetchAssignedReports = async () => {
     try {
@@ -21,7 +23,7 @@ const WorkerDashboard = () => {
       const { data, error } = await supabase
         .from('reports')
         .select('*')
-        .eq('assigned_to', currentWorkerId)
+        .eq('assigned_to', selectedWorkerId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -76,32 +78,56 @@ const WorkerDashboard = () => {
 
     // Real-time synchronization
     const channel = supabase
-      .channel('worker-assignments')
+      .channel(`worker-assignments-${selectedWorkerId}`)
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'reports', 
-        filter: `assigned_to=eq.${currentWorkerId}` 
+        filter: `assigned_to=eq.${selectedWorkerId}` 
       }, (payload) => {
-        fetchAssignedReports();
-        fetchAllWorkersWithStats(); // Also refresh stats on changes
+        // If a new report is inserted, show a subtle "Assigning..." state
+        if (payload.eventType === 'INSERT') {
+          const reportId = payload.new.id;
+          setAssigningIds(prev => new Set(prev).add(reportId));
+          
+          // Clear after a realistic orchestration delay
+          setTimeout(() => {
+            setAssigningIds(prev => {
+              const next = new Set(prev);
+              next.delete(reportId);
+              return next;
+            });
+          }, 800);
+        }
+
+        // Debounce frequent database triggers to prevent HUD flickering
+        clearTimeout(fetchTimeoutRef.current);
+        fetchTimeoutRef.current = setTimeout(() => {
+          fetchAssignedReports();
+          fetchAllWorkersWithStats();
+        }, 400); 
       })
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
-  }, []);
+    return () => {
+      supabase.removeChannel(channel);
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+    };
+  }, [selectedWorkerId]);
 
   const handleStatusTransition = async (id, nextStatus) => {
     try {
+      console.log("Updating Mission:", id, "->", nextStatus);
       setActionId(id);
       await updateReportStatus(id, nextStatus);
       
+      // Ensure UI reflects latest ground-truth immediately after update
+      await fetchAssignedReports();
+
       if (nextStatus === 'resolved') {
         // Initiate temporal transition delay for resolved missions
         setTransitioningIds(prev => new Set(prev).add(id));
         
-        await fetchAssignedReports();
-
         setTimeout(() => {
           setTransitioningIds(prev => {
             const next = new Set(prev);
@@ -109,10 +135,7 @@ const WorkerDashboard = () => {
             return next;
           });
         }, 2500);
-      } else {
-        await fetchAssignedReports();
       }
-
     } catch (err) {
       console.error('Workflow Transition failure:', err);
     } finally {
@@ -133,11 +156,14 @@ const WorkerDashboard = () => {
   const completedMissions = reports.filter(r => r.status === 'resolved' && !transitioningIds.has(r.id));
 
   // --- HELPER: SLA COUNTDOWN ---
-  const getTimeLeft = (eta) => {
-    if (!eta) return null;
+  const getTimeLeft = (report) => {
+    const { eta, created_at } = report;
+    if (!eta || !created_at) return null;
 
+    const startTime = new Date(created_at).getTime();
+    const deadlineTime = startTime + (eta * 60 * 1000);
     const now = Date.now();
-    const diff = eta - now;
+    const diff = deadlineTime - now;
 
     if (diff <= 0) return "OVERDUE";
 
@@ -148,7 +174,7 @@ const WorkerDashboard = () => {
   };
 
   /* --- SUBCOMPONENT: MISSION CARD --- */
-  const MissionCardRow = ({ report, isResolved }) => {
+  const MissionCardRow = ({ report, isResolved, isAssigning }) => {
     const severity = getSeverityStyle(report.severity);
     const isUpdating = actionId === report.id;
     const currentStatus = report.status || 'reported';
@@ -194,10 +220,18 @@ const WorkerDashboard = () => {
 
         <div style={{ marginBottom: '24px' }}>
           <h3 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '8px', color: isResolved ? 'var(--text-muted)' : 'var(--text-primary)' }}>{report.title || 'Mission Record'}</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '14px' }}>
-            <MapPin size={16} /> {report.location_name || 'Grid Coordinates Locked'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: isResolved ? 'var(--text-muted)' : 'var(--neon-green)', fontWeight: 700, fontSize: '15px' }}>
+            <MapPin size={18} /> {report.location_name || 'Grid Coordinates Locked'}
           </div>
         </div>
+
+        {report.image_url && (
+          <img 
+            src={report.image_url} 
+            alt="Operational Intelligence" 
+            style={{ width: '100%', borderRadius: '16px', marginBottom: '24px', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }} 
+          />
+        )}
 
         <div style={{ 
           background: 'rgba(15, 23, 42, 0.08)', padding: '16px', borderRadius: '12px', fontSize: '14px', 
@@ -211,12 +245,12 @@ const WorkerDashboard = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
               <Clock size={14} /> 
               <span style={{
-                color: report.eta && report.eta < Date.now()
+                color: isOverdue
                   ? 'var(--coral-red)'
                   : (report.eta ? 'var(--electric-blue)' : 'inherit'),
                 fontWeight: report.eta ? 800 : 600
               }}>
-                {getTimeLeft(report.eta) || new Date(report.created_at).toLocaleTimeString()}
+                {getTimeLeft(report) || new Date(report.created_at).toLocaleString()}
               </span>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
@@ -225,16 +259,17 @@ const WorkerDashboard = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div style={{ 
-              padding: '4px 10px', background: 'rgba(41, 121, 255, 0.1)', border: '1px solid rgba(41, 121, 255, 0.2)', 
-              borderRadius: '6px', fontSize: '10px', color: 'var(--electric-blue)', fontWeight: 800, letterSpacing: '0.5px' 
-            }}>
-              ASSIGNED TO YOU
-            </div>
+            {isResolved ? (
+              <div style={{ fontSize: '10px', color: 'var(--neon-green)', background: 'rgba(0, 200, 83, 0.1)', padding: '4px 10px', borderRadius: '6px', fontWeight: 800 }}>COMPLETED</div>
+            ) : isAssigning ? (
+              <div style={{ fontSize: '12px', color: 'var(--electric-blue)', fontWeight: 800, animation: 'pulse 1s infinite' }}>Assigning...</div>
+            ) : (
+              <div style={{ fontSize: '10px', color: 'var(--electric-blue)', background: 'rgba(41, 121, 255, 0.1)', padding: '4px 10px', borderRadius: '6px', fontWeight: 800 }}>ASSIGNED</div>
+            )}
             
             {isResolved ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--neon-green)', fontWeight: 800, fontSize: '14px' }}>
-                ✔ Completed
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '4px', textAlign: 'right' }}>
+                <div style={{ color: 'var(--neon-green)', fontWeight: 800, fontSize: '14px', width: '100%' }}>✔ Completed</div>
               </div>
             ) : currentStatus === 'assigned' ? (
               <button 
@@ -245,7 +280,7 @@ const WorkerDashboard = () => {
               >
                 {isUpdating ? 'Synchronizing...' : <><Play size={14} /> Start Mission</>}
               </button>
-            ) : (
+            ) : currentStatus === 'in_progress' ? (
               <button 
                 onClick={() => handleStatusTransition(report.id, 'resolved')}
                 disabled={isUpdating}
@@ -254,6 +289,8 @@ const WorkerDashboard = () => {
               >
                 {isUpdating ? 'Neutralizing...' : 'Mark Resolved'}
               </button>
+            ) : (
+              <div style={{ fontSize: '10px', color: 'var(--electric-blue)', background: 'rgba(41, 121, 255, 0.1)', padding: '4px 10px', borderRadius: '6px', fontWeight: 800 }}>ASSIGNED</div>
             )}
           </div>
         </div>
@@ -392,7 +429,32 @@ const WorkerDashboard = () => {
               <ChevronLeft size={18} /> Exit Terminal
             </button>
             <h1 className="gradient-text" style={{ fontSize: '42px', fontWeight: 900, marginBottom: '12px' }}>Responder Console</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '18px' }}>Active missions for <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>Raj Worker</span> (Unit: Alpha-1)</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '18px' }}>Active missions for </p>
+              <select
+                value={selectedWorkerId}
+                onChange={(e) => setSelectedWorkerId(e.target.value)}
+                style={{
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(41, 121, 255, 0.3)',
+                  borderRadius: '10px',
+                  padding: '6px 14px',
+                  color: 'var(--electric-blue)',
+                  fontWeight: 800,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                }}
+              >
+                {allWorkers.map(w => (
+                  <option key={w.id} value={w.id} style={{ background: '#0F172A', color: 'white' }}>
+                    {w.name} {w.id === "80088469-b24f-4d94-bf03-a2c9d6cc346b" ? "(Primary Unit)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
             
             <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
               <button 
@@ -434,16 +496,21 @@ const WorkerDashboard = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '60px' }}>
             
             {/* Critical Issues Section */}
-            {reports.filter(r => r.eta && r.eta < Date.now() && r.status !== 'resolved').length > 0 && (
+            {reports.filter(r => r.eta && (new Date(r.created_at).getTime() + (r.eta * 60 * 1000)) < Date.now() && r.status !== 'resolved').length > 0 && (
               <section>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '24px' }}>
                   <div style={{ padding: '10px', background: 'rgba(255, 82, 82, 0.1)', borderRadius: '12px', color: 'var(--coral-red)' }}><AlertTriangle size={20} /></div>
-                  <h2 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.5px', color: 'var(--coral-red)' }}>⚠️ Critical Alerts <span style={{ color: 'var(--text-muted)', fontSize: '16px', fontWeight: 500, marginLeft: '10px' }}>({reports.filter(r => r.eta && r.eta < Date.now() && r.status !== 'resolved').length})</span></h2>
+                  <h2 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.5px', color: 'var(--coral-red)' }}>⚠️ Critical Alerts <span style={{ color: 'var(--text-muted)', fontSize: '16px', fontWeight: 500, marginLeft: '10px' }}>({reports.filter(r => r.eta && (new Date(r.created_at).getTime() + (r.eta * 60 * 1000)) < Date.now() && r.status !== 'resolved').length})</span></h2>
                 </div>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))', gap: '24px' }}>
-                  {reports.filter(r => r.eta && r.eta < Date.now() && r.status !== 'resolved').map(report => (
-                    <MissionCardRow key={report.id} report={report} isResolved={false} />
+                  {reports.filter(r => r.eta && (new Date(r.created_at).getTime() + (r.eta * 60 * 1000)) < Date.now() && r.status !== 'resolved').map(report => (
+                    <MissionCardRow 
+                      key={report.id} 
+                      report={report} 
+                      isResolved={false} 
+                      isAssigning={assigningIds.has(report.id)} 
+                    />
                   ))}
                 </div>
               </section>
@@ -463,7 +530,12 @@ const WorkerDashboard = () => {
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))', gap: '24px' }}>
                   {activeMissions.map(report => (
-                    <MissionCardRow key={report.id} report={report} isResolved={report.status === 'resolved'} />
+                    <MissionCardRow 
+                      key={report.id} 
+                      report={report} 
+                      isResolved={report.status === 'resolved'} 
+                      isAssigning={assigningIds.has(report.id)} 
+                    />
                   ))}
                 </div>
               )}
@@ -479,7 +551,12 @@ const WorkerDashboard = () => {
                 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))', gap: '24px', opacity: 0.7 }}>
                   {completedMissions.map(report => (
-                    <MissionCardRow key={report.id} report={report} isResolved={true} />
+                    <MissionCardRow 
+                      key={report.id} 
+                      report={report} 
+                      isResolved={true} 
+                      isAssigning={assigningIds.has(report.id)} 
+                    />
                   ))}
                 </div>
               </section>

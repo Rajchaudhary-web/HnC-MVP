@@ -2,11 +2,13 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Activity } from 'lucide-react';
 
-const Navbar = () => {
+const Navbar = ({ theme, toggleTheme }) => {
   const location = useLocation();
 
   // Hide nav on dashboard pages where we have a sidebar
   if (location.pathname === '/admin') return null;
+
+  const isLandingPage = location.pathname === "/";
 
   const navLinks = [
     { name: 'Home', path: '/' },
@@ -34,7 +36,8 @@ const Navbar = () => {
       border: '1px solid rgba(255, 255, 255, 0.08)',
       boxShadow: '0 20px 40px rgba(0,0,0,0.4), inset 0 0 20px rgba(255,255,255,0.02)'
     }}>
-      <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '14px', textDecoration: 'none' }}>
+      {/* LEFT: Logo Section */}
+      <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '14px', textDecoration: 'none', position: 'relative', zIndex: 10 }}>
         <div style={{ 
           background: 'var(--electric-blue)', 
           padding: '10px', 
@@ -49,7 +52,15 @@ const Navbar = () => {
         </span>
       </Link>
 
-      <div style={{ display: 'flex', gap: '8px' }}>
+      {/* CENTER: Navigation Links (Absolute Centered) */}
+      <div style={{ 
+        position: 'absolute',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex', 
+        gap: '8px', 
+        alignItems: 'center' 
+      }}>
         {navLinks.map((link) => {
           const isActive = location.pathname === link.path;
           return (
@@ -74,9 +85,36 @@ const Navbar = () => {
         })}
       </div>
 
-      <Link to="/admin" className="btn-neon btn-blue" style={{ textDecoration: 'none', padding: '10px 24px' }}>
-        Operator
-      </Link>
+      {/* RIGHT: Action Cluster */}
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', position: 'relative', zIndex: 10 }}>
+        {!isLandingPage && (
+          <button
+            onClick={toggleTheme}
+            style={{
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              padding: '10px 16px',
+              borderRadius: '12px',
+              color: 'white',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: 'pointer',
+              transition: 'var(--transition)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseOver={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.1)'}
+            onMouseOut={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.05)'}
+          >
+            {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
+          </button>
+        )}
+
+        <Link to="/admin" className="btn-neon btn-blue" style={{ textDecoration: 'none', padding: '10px 24px' }}>
+          Operator
+        </Link>
+      </div>
     </nav>
   );
 };
