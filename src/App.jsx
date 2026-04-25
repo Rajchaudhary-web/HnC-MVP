@@ -9,6 +9,7 @@ import ReportIssue from './pages/ReportIssue';
 import ResolvedIssues from './pages/ResolvedIssues';
 import WorkerDashboard from './pages/WorkerDashboard';
 import ContactRequests from './pages/ContactRequests';
+import InsightsPanel from './pages/InsightsPanel';
 import Loader from './components/Loader';
 import './index.css';
 
@@ -49,6 +50,7 @@ const AppContent = () => {
         location.pathname === '/report' || 
         location.pathname === '/resolved' || 
         location.pathname === '/worker' || 
+        location.pathname === '/insights' || 
         location.pathname === '/admin/requests') {
       setLoading(true);
     }
@@ -69,6 +71,7 @@ const AppContent = () => {
         <Route path="/worker" element={<WorkerDashboard />} />
         <Route path="/resolved" element={<ResolvedIssues />} />
         <Route path="/admin/requests" element={<ContactRequests />} />
+        <Route path="/insights" element={<InsightsPanel />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="*" element={<LandingPage />} />

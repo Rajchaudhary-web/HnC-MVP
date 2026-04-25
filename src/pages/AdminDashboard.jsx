@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, MessageSquare, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin, Zap } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin, Zap, BarChart2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, updateReportStatus, assignReport, simulateReports } from '../lib/supabaseClient';
 
@@ -593,6 +593,7 @@ const AdminDashboard = () => {
           { label: 'Worker Panel', icon: Activity, route: '/worker' },
           { label: 'Resolved Issues', icon: CheckCircle, route: '/resolved' },
           { label: 'Contact Requests', icon: Mail, route: '/admin/requests' },
+          { label: 'System Insights', icon: BarChart2, route: '/insights' },
         ].map((item) => (
           <div
             key={item.label}

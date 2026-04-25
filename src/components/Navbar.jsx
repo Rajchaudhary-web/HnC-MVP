@@ -5,8 +5,8 @@ import { Activity } from 'lucide-react';
 const Navbar = ({ theme, toggleTheme }) => {
   const location = useLocation();
 
-  // Hide nav on dashboard pages where we have a sidebar
-  if (location.pathname === '/admin') return null;
+  // Hide nav on dashboard pages where we have a sidebar or different navigation paradigm
+  if (location.pathname.startsWith('/admin') || location.pathname === '/insights') return null;
 
   const isLandingPage = location.pathname === "/";
 
