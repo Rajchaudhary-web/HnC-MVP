@@ -30,6 +30,15 @@ const STATUS_STAGES = {
  */
 export const autoAssignWorker = async (reportId) => {
   try {
+    // 0. Safety Check: Ensure report isn't already assigned to prevent race conditions
+    const { data: existing } = await supabase
+      .from('reports')
+      .select('assigned_to')
+      .eq('id', reportId)
+      .single();
+
+    if (existing?.assigned_to) return;
+
     // 1. Fetch all workers globally
     const { data: workers, error: workersError } = await supabase
       .from('workers')
@@ -71,6 +80,31 @@ export const autoAssignWorker = async (reportId) => {
     }
   } catch (err) {
     console.error("Critical Failure in Auto-Assignment Engine:", err);
+  }
+};
+
+/**
+ * Global Orchestrator: Scans for any 'reported' issues without an assigned worker 
+ * and attempts dispatching based on current responder availability.
+ */
+export const assignAllUnassignedReports = async () => {
+  try {
+    const { data: reports, error } = await supabase
+      .from('reports')
+      .select('*')
+      .is('assigned_to', null)
+      .eq('status', 'reported');
+
+    if (error || !reports) return;
+
+    console.log(`🧠 Orchestrating auto-assignment for ${reports.length} unassigned incidents...`);
+    
+    // Process sequentially to avoid race conditions on worker load counts
+    for (const report of reports) {
+      await autoAssignWorker(report.id);
+    }
+  } catch (err) {
+    console.error("Batch Auto-Assignment Orchestration Failure:", err);
   }
 };
 
@@ -138,7 +172,7 @@ export const createReport = async (reportData) => {
 
   // Immediately trigger the centralized auto-assignment engine
   if (data && data.length > 0) {
-    autoAssignWorker(data[0].id); // Non-blocking
+    await assignAllUnassignedReports(); // Orchestrate all pending reports
   }
 
   return data;
@@ -344,6 +378,9 @@ export const simulateReports = async () => {
     // Randomized temporal delay (1.0s - 2.0s) for realistic, human-like telemetry flow
     await new Promise(res => setTimeout(res, 1000 + Math.random() * 1000));
   }
+
+  // Final orchestration pass to catch any missed assignments
+  await assignAllUnassignedReports();
 
   console.log("🏁 Simulation Complete: 6 High-Fidelity Records Synchronized.");
 };

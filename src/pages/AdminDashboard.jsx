@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LayoutDashboard, MessageSquare, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin, Zap, BarChart2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase, updateReportStatus, assignReport, simulateReports } from '../lib/supabaseClient';
+import { supabase, updateReportStatus, assignReport, simulateReports, autoAssignWorker } from '../lib/supabaseClient';
 
 const StatCard = ({ icon: Icon, label, value, color }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -219,6 +219,11 @@ const AdminDashboard = () => {
         (payload) => {
           console.log('Realtime event Manifested:', payload);
           fetchReports(); // refresh instantly on ground-truth mutation
+          
+          // Auto-assignment trigger for new reports
+          if (payload.eventType === 'INSERT' && !payload.new.assigned_to) {
+            autoAssignWorker(payload.new.id);
+          }
         }
       )
       .subscribe();
@@ -940,7 +945,28 @@ const AdminDashboard = () => {
                             )}
                           </td>
                           <td style={{ padding: '15px', borderTopRightRadius: '12px', borderBottomRightRadius: '12px', position: 'relative', zIndex: 1 }}>
-                            {report.status !== 'resolved' ? (
+                            {report.status === 'resolved' ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--sage)', fontWeight: 800, fontSize: '13px', opacity: 0.6, padding: '10px' }}>
+                                <CheckCircle size={16} /> Operational
+                              </div>
+                            ) : report.assigned_to ? (
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '8px 16px',
+                                background: 'rgba(41, 121, 255, 0.08)',
+                                border: '1px solid rgba(41, 121, 255, 0.3)',
+                                borderRadius: '20px',
+                                color: 'var(--electric-blue)',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                boxShadow: '0 0 15px rgba(41, 121, 255, 0.1)',
+                                letterSpacing: '0.5px'
+                              }}>
+                                <Zap size={14} /> {workers.find(w => w.id === report.assigned_to)?.name || 'Auto Assigned'}
+                              </div>
+                            ) : (
                               <div style={{ position: 'relative' }}>
                                 <select
                                   disabled={assigningId === report.id}
@@ -951,14 +977,14 @@ const AdminDashboard = () => {
                                     fontSize: '13px',
                                     background: 'var(--bg-card)',
                                     color: 'var(--text-primary)',
-                                    border: '1px solid var(--electric-blue)',
+                                    border: '1px solid var(--border-color)',
                                     width: '200px',
                                     cursor: 'pointer',
                                     outline: 'none'
                                   }}
                                   onChange={(e) => handleAssignWorker(report.id, e.target.value)}
                                 >
-                                  {!report.assigned_to && <option value="">Assign Worker</option>}
+                                  <option value="">Assign Worker</option>
                                   {workers.map(w => (
                                     <option key={w.id} value={w.id} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
                                       {w.name}
@@ -968,10 +994,6 @@ const AdminDashboard = () => {
                                 {assigningId === report.id && (
                                   <div style={{ fontSize: '10px', color: 'var(--teal)', marginTop: '4px', position: 'absolute' }}>Updating Neural Grid...</div>
                                 )}
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--sage)', fontWeight: 800, fontSize: '13px', opacity: 0.6, padding: '10px' }}>
-                                <CheckCircle size={16} /> Operational
                               </div>
                             )}
                           </td>

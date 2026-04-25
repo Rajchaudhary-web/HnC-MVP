@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, AlertTriangle, Clock, MapPin, ChevronLeft, Activity, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, updateReportStatus } from '../lib/supabaseClient';
+import { supabase, updateReportStatus, assignAllUnassignedReports } from '../lib/supabaseClient';
 
 const WorkerDashboard = () => {
   const [reports, setReports] = useState([]);
@@ -13,6 +13,7 @@ const WorkerDashboard = () => {
   const [allWorkers, setAllWorkers] = useState([]);
   const [workerStats, setWorkerStats] = useState([]);
   const [assigningIds, setAssigningIds] = useState(new Set());
+  const [proofImage, setProofImage] = useState(null);
   const fetchTimeoutRef = useRef(null);
   const navigate = useNavigate();
 
@@ -115,11 +116,51 @@ const WorkerDashboard = () => {
     };
   }, [selectedWorkerId]);
 
+  const uploadProofImage = async (file) => {
+    try {
+      const fileName = `proof_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const { data, error } = await supabase.storage
+        .from('reports')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: publicUrl } = supabase.storage
+        .from('reports')
+        .getPublicUrl(fileName);
+
+      return publicUrl.publicUrl;
+    } catch (err) {
+      console.error("Storage Upload Failure:", err);
+      return null;
+    }
+  };
+
   const handleStatusTransition = async (id, nextStatus) => {
     try {
       console.log("Updating Mission:", id, "->", nextStatus);
       setActionId(id);
-      await updateReportStatus(id, nextStatus);
+      
+      let imageUrl = null;
+      if (nextStatus === 'resolved') {
+        if (proofImage) {
+          imageUrl = await uploadProofImage(proofImage);
+        }
+
+        const { error } = await supabase
+          .from('reports')
+          .update({
+            status: 'resolved',
+            proof_image_url: imageUrl
+          })
+          .eq('id', id);
+        
+        if (error) throw error;
+        setProofImage(null);
+        await assignAllUnassignedReports();
+      } else {
+        await updateReportStatus(id, nextStatus);
+      }
       
       // Ensure UI reflects latest ground-truth immediately after update
       await fetchAssignedReports();
@@ -281,14 +322,35 @@ const WorkerDashboard = () => {
                 {isUpdating ? 'Synchronizing...' : <><Play size={14} /> Start Mission</>}
               </button>
             ) : currentStatus === 'in_progress' ? (
-              <button 
-                onClick={() => handleStatusTransition(report.id, 'resolved')}
-                disabled={isUpdating}
-                className="btn-neon btn-sage"
-                style={{ padding: '10px 24px', fontSize: '13px', background: 'rgba(0, 200, 83, 0.2)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)' }}
-              >
-                {isUpdating ? 'Neutralizing...' : 'Mark Resolved'}
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Evidence Capture (Required for neutralization)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => setProofImage(e.target.files[0])}
+                    style={{ 
+                      fontSize: '12px', 
+                      color: 'var(--text-muted)',
+                      background: 'rgba(255,255,255,0.05)',
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: '1px dashed rgba(255,255,255,0.1)',
+                      width: '200px'
+                    }}
+                  />
+                  {proofImage && <div style={{ fontSize: '10px', color: 'var(--neon-green)', fontWeight: 800 }}>⚡ Evidence Locked: {proofImage.name}</div>}
+                </div>
+                <button 
+                  onClick={() => handleStatusTransition(report.id, 'resolved')}
+                  disabled={isUpdating}
+                  className="btn-neon btn-sage"
+                  style={{ padding: '10px 24px', fontSize: '13px', background: 'rgba(0, 200, 83, 0.2)', color: 'var(--neon-green)', border: '1px solid var(--neon-green)' }}
+                >
+                  {isUpdating ? 'Neutralizing...' : 'Mark Resolved'}
+                </button>
+              </div>
             ) : (
               <div style={{ fontSize: '10px', color: 'var(--electric-blue)', background: 'rgba(41, 121, 255, 0.1)', padding: '4px 10px', borderRadius: '6px', fontWeight: 800 }}>ASSIGNED</div>
             )}
