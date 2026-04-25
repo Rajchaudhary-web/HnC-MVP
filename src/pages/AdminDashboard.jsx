@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Settings, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin, Zap } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, TrendingUp, AlertTriangle, CheckCircle, Clock, Mail, User, Calendar, ChevronLeft, Activity, MapPin, Zap } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, updateReportStatus, assignReport, simulateReports } from '../lib/supabaseClient';
 
@@ -153,21 +153,10 @@ const AdminDashboard = () => {
 
       if (error) throw error;
 
-      setReports(prev => {
-        const newData = (Array.isArray(data) ? data : []).map(r => ({
-          ...r,
-          area: extractArea(r.location_name)
-        }));
-
-        // Stabilize UI by preventing redundant state updates if data is identical
-        if (
-          prev.length === newData.length &&
-          prev.every((item, i) => item.id === newData[i]?.id)
-        ) {
-          return prev;
-        }
-        return newData;
-      });
+      setReports(Array.isArray(data) ? data.map(r => ({
+        ...r,
+        area: extractArea(r.location_name)
+      })) : []);
     } catch (err) {
       console.log('Error fetching reports:', err);
     } finally {
@@ -253,12 +242,23 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleAssign = async (reportId, workerId) => {
+  const handleAssignWorker = async (reportId, workerId) => {
     try {
       setAssigningId(reportId);
-      await assignReport(reportId, workerId);
+      
+      // STEP 2: Ensure update happens
+      await supabase
+        .from('reports')
+        .update({
+          assigned_to: workerId,
+          status: 'assigned',
+          assigned_at: new Date().toISOString()
+        })
+        .eq('id', reportId);
+
+      // STEP 3: AFTER update, fetch latest reports
+      await fetchReports();
       setShowAssignFor(null);
-      fetchReports();
     } catch (err) {
       console.log('Assignment failed:', err);
     } finally {
@@ -593,11 +593,6 @@ const AdminDashboard = () => {
           { label: 'Worker Panel', icon: Activity, route: '/worker' },
           { label: 'Resolved Issues', icon: CheckCircle, route: '/resolved' },
           { label: 'Contact Requests', icon: Mail, route: '/admin/requests' },
-          { label: 'Incoming Reports', icon: AlertTriangle, route: '#' },
-          { label: 'Analytics', icon: TrendingUp, route: '#' },
-          { label: 'Teams', icon: Users, route: '#' },
-          { label: 'Messages', icon: MessageSquare, route: '#' },
-          { label: 'Settings', icon: Settings, route: '#' },
         ].map((item) => (
           <div
             key={item.label}
@@ -736,7 +731,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Middle Section */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px', marginBottom: '40px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '40px', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '30px', marginBottom: '40px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '40px', alignItems: 'start' }}>
           <div className="glass-card dashboard-card" style={{ padding: '30px' }}>
 
             {/* Area Intelligence Bar */}
@@ -945,39 +940,34 @@ const AdminDashboard = () => {
                           </td>
                           <td style={{ padding: '15px', borderTopRightRadius: '12px', borderBottomRightRadius: '12px', position: 'relative', zIndex: 1 }}>
                             {report.status !== 'resolved' ? (
-                              report.assigned_to ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--electric-blue)', fontWeight: 800, fontSize: '14px' }}>
-                                    <User size={16} /> Assigned to: {assignedWorkerName}
-                                  </div>
-                                  {report.assigned_at && (
-                                    <div style={{ fontSize: '10px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '24px' }}>
-                                      <Clock size={10} /> Dispatched: {new Date(report.assigned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div style={{ position: 'relative' }}>
-                                  <select
-                                    disabled={assigningId === report.id}
-                                    style={{
-                                      padding: '10px 16px',
-                                      borderRadius: '10px',
-                                      fontSize: '13px',
-                                      background: 'var(--bg-card)',
-                                      color: 'var(--text-primary)',
-                                      border: '1px solid var(--electric-blue)',
-                                      width: '200px',
-                                      cursor: 'pointer',
-                                      outline: 'none'
-                                    }}
-                                    onChange={(e) => handleAssign(report.id, e.target.value)}
-                                  >
-                                    <option value="">{assigningId === report.id ? 'Dispatching...' : 'Assign Responder...'}</option>
-                                    {WORKERS.map(w => <option key={w.id} value={w.id} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}>{w.name}</option>)}
-                                  </select>
-                                </div>
-                              )
+                              <div style={{ position: 'relative' }}>
+                                <select
+                                  disabled={assigningId === report.id}
+                                  value={report.assigned_to || ''}
+                                  style={{
+                                    padding: '10px 16px',
+                                    borderRadius: '10px',
+                                    fontSize: '13px',
+                                    background: 'var(--bg-card)',
+                                    color: 'var(--text-primary)',
+                                    border: '1px solid var(--electric-blue)',
+                                    width: '200px',
+                                    cursor: 'pointer',
+                                    outline: 'none'
+                                  }}
+                                  onChange={(e) => handleAssignWorker(report.id, e.target.value)}
+                                >
+                                  {!report.assigned_to && <option value="">Assign Worker</option>}
+                                  {workers.map(w => (
+                                    <option key={w.id} value={w.id} style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                                      {w.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                {assigningId === report.id && (
+                                  <div style={{ fontSize: '10px', color: 'var(--teal)', marginTop: '4px', position: 'absolute' }}>Updating Neural Grid...</div>
+                                )}
+                              </div>
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--sage)', fontWeight: 800, fontSize: '13px', opacity: 0.6, padding: '10px' }}>
                                 <CheckCircle size={16} /> Operational
@@ -995,32 +985,7 @@ const AdminDashboard = () => {
             )}
           </div>
 
-          <div className="glass-card dashboard-card" style={{ padding: '30px' }}>
-            <h3 style={{ marginBottom: '20px', letterSpacing: '0.5px' }}>Response Trends</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-              {[
-                { label: 'Morning Peak', val: 85 },
-                { label: 'Afternoon', val: 45 },
-                { label: 'Evening', val: 65 }
-              ].map(item => (
-                <div key={item.label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{item.label}</span>
-                    <span style={{ color: 'var(--teal)', fontWeight: 700 }}>{item.val}% efficiency</span>
-                  </div>
-                  <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '4px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <div style={{
-                      width: `${item.val}%`,
-                      height: '100%',
-                      background: 'linear-gradient(90deg, var(--teal), var(--electric-blue))',
-                      borderRadius: '4px',
-                      boxShadow: '0 0 10px rgba(0, 255, 200, 0.3)'
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+
         </div>
 
         {/* Demo Requests Section */}
